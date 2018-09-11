@@ -1,7 +1,10 @@
 package com.jordanml.TransactionClassifier;
 
+
 import weka.core.Instances;
 import weka.core.converters.ConverterUtils.DataSource;
+import weka.filters.Filter;
+import weka.filters.supervised.attribute.Discretize;
 
 public class Dataset {
     
@@ -48,6 +51,30 @@ public class Dataset {
             data = DataSource.read(path);
         } catch (Exception e) {
             System.out.println("Error reading " + path);
+            System.out.println(e.getMessage());
+        }
+    }
+    
+    /**
+     * Discretize data using WEKA implementation of Fayyad & Irani MDL discretization.
+     * See WEKA 3-8-2 Manual p.219
+     */
+    public void discretize(Boolean replaceData) {
+        
+        Instances discretizedData = null;
+        Discretize discretizer = new Discretize();
+        
+        try {
+            discretizer.setInputFormat(data);
+            discretizedData = Filter.useFilter(data, discretizer);
+            
+            if(replaceData.equals(true)) {
+                data = discretizedData;
+            } else {
+                //Save to new file
+            }
+        } catch (Exception e) {
+            System.out.println("Error discretizing data");
             System.out.println(e.getMessage());
         }
     }
