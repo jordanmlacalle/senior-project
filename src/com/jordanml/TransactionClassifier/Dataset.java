@@ -2,6 +2,7 @@ package com.jordanml.TransactionClassifier;
 
 
 import weka.core.Instances;
+import weka.core.converters.ConverterUtils.DataSink;
 import weka.core.converters.ConverterUtils.DataSource;
 import weka.filters.Filter;
 import weka.filters.supervised.attribute.Discretize;
@@ -57,9 +58,11 @@ public class Dataset {
     
     /**
      * Discretize data using WEKA implementation of Fayyad & Irani MDL discretization.
-     * See WEKA 3-8-2 Manual p.219
+     * See WEKA 3-8-2 Manual p.219. 
+     * @param savePath Path to save discretized data to. The file extension
+     * (.arff or .csv) is specified when providing savePath.
      */
-    public void discretize(Boolean replaceData) {
+    public void discretize(String savePath) {
         
         Instances discretizedData = null;
         Discretize discretizer = new Discretize();
@@ -68,15 +71,25 @@ public class Dataset {
             discretizer.setInputFormat(data);
             discretizedData = Filter.useFilter(data, discretizer);
             
-            if(replaceData.equals(true)) {
-                data = discretizedData;
-            } else {
-                //Save to new file
-            }
         } catch (Exception e) {
             System.out.println("Error discretizing data");
             System.out.println(e.getMessage());
+        } finally {
+            if(savePath.equals(null)) {
+                //replace data and set path to null 
+                data = discretizedData;
+                path = null;
+            } else {
+                /*Save discretized data to new file. See WEKA 3-8-2 Manual p.238.
+                 * The DataSink.write method can save to both .arff and .csv
+                 */
+                try {
+                    DataSink.write(savePath, discretizedData);
+                } catch (Exception e) {
+                    System.out.println("Error saving discretized data to " + savePath);
+                    System.out.println(e.getMessage());
+                }    
+            }
         }
     }
-    
 }
