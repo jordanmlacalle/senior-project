@@ -10,7 +10,7 @@ public class Dataset {
      * path - the path to the file from which the dataset was loaded
      */
     public Instances data = null;
-    public String path = null;
+    private String path = null;
     
     /**
      * Constructor
@@ -24,6 +24,14 @@ public class Dataset {
     public Dataset(String path) {
         this.path = path;
         loadData(path);
+    }
+    
+    /**
+     * Path getter
+     * @return Returns the path to the file containing the dataset
+     */
+    public String getPath() {
+        return path;
     }
     
     /**
