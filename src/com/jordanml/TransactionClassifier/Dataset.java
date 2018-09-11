@@ -23,10 +23,10 @@ public class Dataset {
     
     /**
      * Constructor with path as parameter. Loads dataset when new Dataset object is created.
-     * @param path The path to the file containing the dataset.
+     * @param path The path to the file containing the dataset
+     * @param classIndex The index of the class attribute ( 0-indexed)
      */
     public Dataset(String path) {
-        this.path = path;
         loadData(path);
     }
     
@@ -50,9 +50,10 @@ public class Dataset {
         try {
             //See p.210 of the WEKA 3-8-2 manual
             data = DataSource.read(path);
+            this.path = path;
         } catch (Exception e) {
-            System.out.println("Error reading " + path);
-            System.out.println(e.getMessage());
+            System.err.println("Error reading " + path);
+            System.err.println(e.getMessage());
         }
     }
     
@@ -64,16 +65,22 @@ public class Dataset {
      */
     public void discretize(String savePath) {
         
+        if(data.classIndex() == -1) {
+            System.out.println("Class index not set. Set class index prior to discretization.");
+            return;
+        }
+        
         Instances discretizedData = null;
         Discretize discretizer = new Discretize();
         
         try {
+            //discretize data
             discretizer.setInputFormat(data);
             discretizedData = Filter.useFilter(data, discretizer);
             
         } catch (Exception e) {
             System.out.println("Error discretizing data");
-            System.out.println(e.getMessage());
+            System.err.println(e.getMessage());
         } finally {
             if(savePath.equals(null)) {
                 //replace data and set path to null 
@@ -86,8 +93,8 @@ public class Dataset {
                 try {
                     DataSink.write(savePath, discretizedData);
                 } catch (Exception e) {
-                    System.out.println("Error saving discretized data to " + savePath);
-                    System.out.println(e.getMessage());
+                    System.err.println("Error saving discretized data to " + savePath);
+                    System.err.println(e.getMessage());
                 }    
             }
         }

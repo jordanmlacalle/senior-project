@@ -12,5 +12,7 @@ public class TransactionClassifier {
             System.out.println(allTransactions.data.numInstances() + " instances");
             System.out.println(allTransactions.data.numAttributes() + " attributes");
         }
+        
+        
     }
 }
