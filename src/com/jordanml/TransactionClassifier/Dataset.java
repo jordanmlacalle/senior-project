@@ -15,17 +15,10 @@ public class Dataset {
      * attributes - the number of attributes in the dataset
      * path - the path to the file from which the dataset was loaded
      */
-<<<<<<< refs/remotes/origin/#3_Verify_discretization_with_histograms
     public Instances data;
     private int instances;
     private int attributes;
     private String path;
-=======
-    public Instances data = null;
-    private int instances = 0;
-    private int attributes = 0;
-    public String path = null;
->>>>>>> Setup discretization test
     
     /**
      * Constructor
