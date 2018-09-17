@@ -11,15 +11,31 @@ public class Dataset {
     
     /**
      * data - the object that contains the dataset 
+     * instances - the number of instances in the dataset
+     * attributes - the number of attributes in the dataset
      * path - the path to the file from which the dataset was loaded
      */
+<<<<<<< refs/remotes/origin/#3_Verify_discretization_with_histograms
+    public Instances data;
+    private int instances;
+    private int attributes;
+    private String path;
+=======
     public Instances data = null;
-    private String path = null;
+    private int instances = 0;
+    private int attributes = 0;
+    public String path = null;
+>>>>>>> Setup discretization test
     
     /**
      * Constructor
      */
-    public Dataset() {}
+    public Dataset() {
+        data = null;
+        instances = 0;
+        attributes = 0;
+        path = null;
+    }
     
     /**
      * Constructor with path as parameter. Loads dataset when new Dataset object is created.
@@ -28,14 +44,21 @@ public class Dataset {
      */
     public Dataset(String path) {
         loadData(path);
+        instances = data.numInstances();
+        attributes = data.numAttributes();
     }
     
     /**
-     * Path getter
-     * @return Returns the path to the file containing the dataset
+     * Getters
      */
     public String getPath() {
         return path;
+    }
+    public int numInstances() {
+        return instances;
+    }
+    public int numAttributes() {
+        return attributes;
     }
     
     /**
@@ -51,6 +74,8 @@ public class Dataset {
             //See p.210 of the WEKA 3-8-2 manual
             data = DataSource.read(path);
             this.path = path;
+            this.instances = data.numInstances();
+            this.attributes = data.numAttributes();
         } catch (Exception e) {
             System.err.println("Error reading " + path);
             System.err.println(e.getMessage());

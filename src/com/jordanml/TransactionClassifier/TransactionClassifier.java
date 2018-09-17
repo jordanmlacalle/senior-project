@@ -3,7 +3,7 @@ package com.jordanml.TransactionClassifier;
 public class TransactionClassifier {
     
     public static void main(String[] args) {
-        Dataset allTransactions = new Dataset("src/creditcard_nom.arff");
+        Dataset allTransactions = new Dataset("src/data/creditcard_nom.arff");
         
         if(allTransactions.data == null) {
             System.out.println("No dataset loaded");
@@ -12,7 +12,6 @@ public class TransactionClassifier {
             System.out.println(allTransactions.data.numInstances() + " instances");
             System.out.println(allTransactions.data.numAttributes() + " attributes");
         }
-        
         
     }
 }
