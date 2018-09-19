@@ -54,6 +54,14 @@ public class Dataset {
         return attributes;
     }
     
+    public boolean hasData() {
+        if(data == null) {
+            return false;
+        }
+        
+        return true;
+    }
+    
     /**
      * Loads dataset from the provided file into the data Instances object.
      * 
@@ -81,11 +89,11 @@ public class Dataset {
      * @param savePath Path to save discretized data to. The file extension
      * (.arff or .csv) is specified when providing savePath.
      */
-    public void discretize(String savePath) {
+    public boolean discretize(String savePath) throws Exception {
         
         if(data.classIndex() == -1) {
             System.out.println("Class index not set. Set class index prior to discretization.");
-            return;
+            return false;
         }
         
         Instances discretizedData = null;
@@ -99,8 +107,9 @@ public class Dataset {
         } catch (Exception e) {
             System.out.println("Error discretizing data");
             System.err.println(e.getMessage());
+            throw e;
         } finally {
-            if(savePath.equals(null)) {
+            if(savePath == null) {
                 //replace data and set path to null 
                 data = discretizedData;
                 path = null;
@@ -113,8 +122,11 @@ public class Dataset {
                 } catch (Exception e) {
                     System.err.println("Error saving discretized data to " + savePath);
                     System.err.println(e.getMessage());
+                    throw e;
                 }    
             }
-        }
+        } 
+        
+        return true;
     }
 }
