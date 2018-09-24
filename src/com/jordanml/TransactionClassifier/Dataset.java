@@ -16,8 +16,6 @@ public class Dataset {
      * path - the path to the file from which the dataset was loaded
      */
     public Instances data;
-    private int instances;
-    private int attributes;
     private String path;
     
     /**
@@ -25,8 +23,6 @@ public class Dataset {
      */
     public Dataset() {
         data = null;
-        instances = 0;
-        attributes = 0;
         path = null;
     }
     
@@ -37,8 +33,6 @@ public class Dataset {
      */
     public Dataset(String path) {
         loadData(path);
-        instances = data.numInstances();
-        attributes = data.numAttributes();
     }
     
     /**
@@ -47,13 +41,15 @@ public class Dataset {
     public String getPath() {
         return path;
     }
+    
     public int numInstances() {
-        return instances;
-    }
-    public int numAttributes() {
-        return attributes;
+        return data.numInstances();
     }
     
+    public int numAttributes() {
+        return data.numAttributes();
+    }
+
     public boolean hasData() {
         if(data == null) {
             return false;
@@ -75,8 +71,7 @@ public class Dataset {
             //See p.210 of the WEKA 3-8-2 manual
             data = DataSource.read(path);
             this.path = path;
-            this.instances = data.numInstances();
-            this.attributes = data.numAttributes();
+            
         } catch (Exception e) {
             System.err.println("Error reading " + path);
             System.err.println(e.getMessage());
