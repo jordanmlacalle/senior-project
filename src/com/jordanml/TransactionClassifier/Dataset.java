@@ -15,7 +15,7 @@ public class Dataset {
      * attributes - the number of attributes in the dataset
      * path - the path to the file from which the dataset was loaded
      */
-    private Instances data;
+    public Instances data;
     private String path;
     
     /**
