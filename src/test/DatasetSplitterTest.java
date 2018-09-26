@@ -44,8 +44,8 @@ public class DatasetSplitterTest {
         
         testSplitter = new DatasetSplitter(testDataset);
         
-        assertEquals(0, testSplitter.getFolds().size(), "Expected size of folds ArrayList to be 0 after constructor call");
-        assertEquals(testDataset.numInstances(), testSplitter.getSource().numInstances(), "Expected sourceData.numInstances() to be equivalent to testDataset.numInstances()");        
+        assertEquals(0, testSplitter.getFolds().size());
+        assertEquals(testDataset.numInstances(), testSplitter.getSource().numInstances());        
     }
 
     /**
@@ -71,7 +71,7 @@ public class DatasetSplitterTest {
         
         testSplitter.initFolds(numFolds);
         testFolds = testSplitter.getFolds();
-        assertEquals(numFolds, testFolds.size(), "testFolds.size() does not match the expected number");
+        assertEquals(numFolds, testFolds.size());
     }
     
     /**
@@ -82,9 +82,9 @@ public class DatasetSplitterTest {
         
         int numFolds = 10;
         
-        assertEquals(false, testSplitter.isInitialized(), "Uninitialized, isInitialized() should return false");
+        assertEquals(false, testSplitter.isInitialized());
         testSplitter.initFolds(numFolds);
-        assertEquals(true, testSplitter.isInitialized(), "Initialized, isInitialized() should return true");
+        assertEquals(true, testSplitter.isInitialized());
     }
 
 }
