@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.*;
 import com.jordanml.TransactionClassifier.Dataset;
 
+import weka.core.Instance;
+
 /**
  * JUnit test class for the Dataset class. 100% coverage for Dataset.java.
  * @author Jordan
@@ -13,19 +15,18 @@ import com.jordanml.TransactionClassifier.Dataset;
 class DatasetTest {
     
     public static Dataset defaultDataset, nominalClass, numericalClass, testDataset;
-    /**
-     * initialized dataset should have:
-     * instances
-     * attributes: 
-     * path: src/data/creditcard_nom.arff
-     */
     
     @BeforeEach
     void iniTestDataset() {
-        defaultDataset = new Dataset();
-        testDataset = new Dataset();
-        numericalClass = new Dataset("../data/creditcard.arff");
-        nominalClass = new Dataset("../data/creditcard_nom.arff");
+        try {
+            defaultDataset = new Dataset();
+            testDataset = new Dataset();
+            numericalClass = new Dataset("../data/creditcard.arff");
+            nominalClass = new Dataset("../data/creditcard_nom.arff");
+        } catch (Exception e) {
+            System.out.println("Could not load data");
+            System.err.println(e.getMessage());
+        }
     }
 
     /**
@@ -61,21 +62,27 @@ class DatasetTest {
     void testDatasetStringError() {
         
         try {
-            new Dataset("nonexistent.arff");
-            fail("Expected exception due to nonexistent file");
-        } catch (Exception e) {
-            
-        }
-        try {
             new Dataset("");
-            fail("Expected exception due to empty path");
         } catch (Exception e) {
             
         }
     }
     
     /**
-     * Test path getter
+     * Test constructor w/ Instances object as parameter
+     */
+    @Test
+    void testDatasetInstances() {
+        
+        try {
+            new Dataset(nominalClass.data);
+        } catch (Exception e) {
+            fail("Could not load data");
+        }
+    }
+    
+    /**
+     * Test getters
      */
     @Test
     void testGetPath() {
@@ -87,15 +94,15 @@ class DatasetTest {
     @Test
     void testNumInstances() {
         
-        assertEquals(284807, nominalClass.numInstances(), "Overloaded constructor should initialize instances to the number of instances in the dataset");
-        assertEquals(0, defaultDataset.numInstances(), "Default constructor should initialize instances to 0");
+        assertEquals(284807, nominalClass.numInstances(), "Num instances did not return correct number of instances");
+        assertEquals(0, defaultDataset.numInstances(), "Null dataset should have 0 instances");
     }
 
     @Test
     void testNumAttributes() {
         
-        assertEquals(31, nominalClass.numAttributes(), "Overloaded constructor should initialize attributes to the number of attributes in the dataset");
-        assertEquals(0, defaultDataset.numAttributes(), "Default constructor should initialize attributes to 0");
+        assertEquals(31, nominalClass.numAttributes(), "Num attributes did not return correct number of attributes");
+        assertEquals(0, defaultDataset.numAttributes(), "Null dataset should have 0 attributes");
     }
 
     /**
@@ -104,13 +111,39 @@ class DatasetTest {
     @Test
     void testLoadData() {
         
-        testDataset.loadData("../data/creditcard_nom.arff");
+        try {
+            testDataset.loadData("../data/creditcard_nom.arff");
+        } catch (Exception e) {
+            fail("Could not load data");
+        }
         assertEquals(284807, testDataset.numInstances());
         assertEquals(31, testDataset.numAttributes());
         assertEquals("../data/creditcard_nom.arff", testDataset.getPath());
         assertEquals(true, testDataset.hasData());
     }
+    
+    
+    /**
+     * Test loading data from Instances object into empty Dataset
+     */
+    @Test
+    void testLoadDataInstances() {
+        
+        try {
+            testDataset.loadData(nominalClass.data);
+        } catch (Exception e) {
+            fail("Could not load data");
+        }
+        assertEquals(284807, testDataset.numInstances());
+        assertEquals(31, testDataset.numAttributes());
+        assertEquals(null, testDataset.getPath());
+        assertEquals(true, testDataset.hasData());
+        
+    }
 
+    /**
+     * Test checking Dataset to see if data exists
+     */
     @Test
     void testHasData() {
         
@@ -184,6 +217,19 @@ class DatasetTest {
             fail("Should not reach exception");
         }
         
+    }
+    
+    /**
+     * Test adding an Instance object to the Instances data object in a Dataset
+     */
+    @Test
+    void testAddInstance() {
+        
+        int numInstances = nominalClass.numInstances();
+        Instance instance = (Instance) nominalClass.data.instance(0).copy();
+        
+        nominalClass.addInstance(instance);
+        assertEquals(numInstances + 1, nominalClass.numInstances());
     }
     
 
