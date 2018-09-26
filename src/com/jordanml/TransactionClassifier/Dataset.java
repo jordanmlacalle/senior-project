@@ -1,6 +1,10 @@
 package com.jordanml.TransactionClassifier;
 
 
+import java.io.File;
+import java.io.IOException;
+
+import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.converters.ConverterUtils.DataSink;
 import weka.core.converters.ConverterUtils.DataSource;
@@ -30,9 +34,19 @@ public class Dataset {
      * Constructor with path as parameter. Loads dataset when new Dataset object is created.
      * @param path The path to the file containing the dataset
      * @param classIndex The index of the class attribute ( 0-indexed)
+     * @throws Exception 
      */
     public Dataset(String path) {
         loadData(path);
+    }
+    
+    /**
+     * Constructor with an Instances object as a parameter. Loads data from an existing instances
+     * object.
+     * @param instances The existing Instances object to copy.
+     */
+    public Dataset(Instances instances) {
+        loadData(instances);
     }
     
     /**
@@ -43,13 +57,23 @@ public class Dataset {
     }
     
     public int numInstances() {
-        return data.numInstances();
+        if(data != null)
+            return data.numInstances();
+        else
+            return 0;
     }
     
     public int numAttributes() {
-        return data.numAttributes();
+        if(data != null)
+            return data.numAttributes();
+        else
+            return 0;
     }
 
+    public void addInstance(Instance instance) {
+        data.add(instance);
+    }
+    
     public boolean hasData() {
         if(data == null) {
             return false;
@@ -62,11 +86,12 @@ public class Dataset {
      * Loads dataset from the provided file into the data Instances object.
      * 
      * @param path The path to the file containing the dataset.
+     * @throws Exception 
      */
     public void loadData(String path) {
         
         System.out.println("Loading data from " + path + "...");
-        
+            
         try {
             //See p.210 of the WEKA 3-8-2 manual
             data = DataSource.read(path);
@@ -75,7 +100,17 @@ public class Dataset {
         } catch (Exception e) {
             System.err.println("Error reading " + path);
             System.err.println(e.getMessage());
-        }
+        }   
+    }
+    
+    /**
+     * Loads dataset from a pre-existing Instances object.
+     * 
+     * @param instances The data to be copied 
+     */
+    public void loadData(Instances instances) {
+        data = new Instances(instances);
+        path = null;
     }
     
     /**
