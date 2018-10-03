@@ -45,9 +45,7 @@ public class DatasetSplitterTest
     @Test
     public void testDatasetSplitter()
     {
-
         testSplitter = new DatasetSplitter(testDataset);
-
         assertEquals(0, testSplitter.getFolds().size());
         assertEquals(testDataset.numInstances(), testSplitter.getSource().numInstances());
     }
@@ -93,5 +91,16 @@ public class DatasetSplitterTest
         testSplitter.initFolds(numFolds);
         assertEquals(true, testSplitter.isInitialized());
     }
-
+    
+    @Test
+    public void testSplitData()
+    {
+        int numFolds = 10;
+        
+        //Folds not initialized, should return false
+        assertEquals(false, testSplitter.splitData());
+        testSplitter.initFolds(numFolds);
+        //Folds initialized, should return true once complete
+        assertEquals(true, testSplitter.splitData());
+    }
 }

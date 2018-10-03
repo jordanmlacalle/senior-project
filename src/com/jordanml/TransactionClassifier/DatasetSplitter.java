@@ -8,6 +8,12 @@ import weka.core.AttributeStats;
 import weka.core.Instance;
 import weka.core.Instances;
 
+/**
+ * Handles the splitting of a dataset across multiple folds.
+ * Preserves a similar class ratio across the folds with a similar number
+ * of instances of each possible class.
+ * 
+ */
 public class DatasetSplitter
 {
 
@@ -243,15 +249,15 @@ public class DatasetSplitter
     private int getClassValueIndex(Instance currentInstance)
     {
         String classValue = currentInstance.stringValue(classIndex);
+        int classValueIndex = -1;
         
-        for(int i = 0; i < numClasses; i++)
+        for(int i = 0; i < numClasses && classValueIndex < 0; i++)
         {
             if(classValue.equals(possibleClasses[i]))
-                return i;
+                classValueIndex = i;
         }
         
-        //return -1 if class value is not one of the noted possible values (should never happen)
-        return -1;
+        return classValueIndex;
     }
     /**
      * Returns the folds ArrayList
