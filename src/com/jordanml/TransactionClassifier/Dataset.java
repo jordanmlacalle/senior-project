@@ -57,11 +57,21 @@ public class Dataset
     /**
      * Getters
      */
+    /**
+     * Gets path to dataset arff or csv
+     * 
+     * @return String - path to the dataset arff or csv
+     */
     public String getPath()
     {
         return path;
     }
 
+    /**
+     * Gets number of instances in dataset
+     * 
+     * @return int - the number of instances in the dataset
+     */
     public int numInstances()
     {
         if (data != null)
@@ -70,6 +80,11 @@ public class Dataset
             return 0;
     }
 
+    /**
+     * Gets number of attributes in dataset
+     * 
+     * @return int - the number of attributes in the dataset
+     */
     public int numAttributes()
     {
         if (data != null)
@@ -78,11 +93,21 @@ public class Dataset
             return 0;
     }
 
-    public void addInstance(Instance instance)
+    /**
+     * Sets the class index
+     * 
+     * @param classIndex The index of the class attribute
+     */
+    public void setClassIndex(int classIndex)
     {
-        data.add(instance);
+        data.setClassIndex(classIndex);
     }
 
+    /**
+     * Checks if the dataset has data loaded
+     * 
+     * @return boolean - true if the dataset has loaded data
+     */
     public boolean hasData()
     {
         if (data == null)
@@ -91,6 +116,16 @@ public class Dataset
         }
 
         return true;
+    }
+    
+    /**
+     * Adds an Instance to the dataset
+     * 
+     * @param instance the Instance to be added to the dataset
+     */
+    public void addInstance(Instance instance)
+    {
+        data.add(instance);
     }
 
     /**
