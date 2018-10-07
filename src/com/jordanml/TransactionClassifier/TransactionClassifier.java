@@ -13,6 +13,9 @@ import rseslib.system.Report;
 import rseslib.system.output.StandardErrorOutput;
 import rseslib.system.output.StandardOutput;
 import rseslib.system.progress.StdOutProgress;
+import weka.classifiers.Evaluation;
+import weka.classifiers.functions.MultilayerPerceptron;
+import weka.core.Instances;
 import weka.core.converters.ConverterUtils.DataSink;
 
 public class TransactionClassifier
@@ -21,8 +24,9 @@ public class TransactionClassifier
     public static void main(String[] args)
     {
 
-        String filepath = "../data/breast-cancer.arff";
+        String filepath = "../data/credit-g.arff";
         Dataset testData = new Dataset(filepath);
+        final int numFolds = 10;
 
         // Ensure that dataset was loaded
         if (!testData.hasData())
@@ -36,22 +40,112 @@ public class TransactionClassifier
             System.out.println(testData.numAttributes() + " attributes");
         }
 
-        // Trial run data splitting
-        ArrayList<Dataset> folds = splitData(testData, 10, "../data/test/testData");
-
-        // Trial run discretization and reducts, 10-CV can be done in a foreach loop
-        // like this
-        int i = 0;
-        for (Dataset fold : folds)
+        try
         {
-            discretize(fold, fold.numAttributes() - 1, "../data/test/disc_testFold_" + i + ".arff");
-            findReducts(fold);
-            i++;
+            classifierTrial(testData, testData.numAttributes()-1, numFolds);
+        } catch (Exception e)
+        {
+            System.err.println("Classifier failed");
+            e.printStackTrace();
         }
 
         System.out.println("Terminating");
     }
 
+    /**
+     * 
+     * @param dataset the source data
+     * @param classIndex the index to the class attribute
+     * @param numFolds the number of folds to use in cross validation
+     * 
+     * @throws Exception
+     */
+    public static void classifierTrial(Dataset dataset, int classIndex, int numFolds) throws Exception
+    {
+        dataset.setClassIndex(classIndex);
+        String foldPaths[] = splitData(dataset, numFolds, "../data/test/testData");
+        ArrayList<Evaluation> modelEvaluations = new ArrayList<Evaluation>();
+        
+        // 10-CV loop tasks:
+        /**
+         * For each fold:
+         *      - Designate current fold as test fold
+         *      - Discretize all folds (including or excluding test fold?)
+         *      - Find reducts for folds
+         *      - Train on 9 training folds
+         *      - Test on testing fold
+         *      
+         */
+        for(int i = 0; i < numFolds; i++)
+        {
+            System.out.println("\nBuilding model to test on fold " + i + ":");
+            
+            Dataset testFold = new Dataset(foldPaths[i]);
+            testFold.setClassIndex(classIndex);
+            ArrayList<Instances> trainFolds = new ArrayList<Instances>();
+            MultilayerPerceptron neuralNetwork = new MultilayerPerceptron();
+            
+            /**
+             * eval will run classifier on a dataset and generate statistics 
+             * (false positives, true positives, etc. that can be used for confusion matrix)
+             */
+            Evaluation eval;
+            
+            // Load training folds and add them to the ArrayList
+            for(int j = 0; j < numFolds; j++)
+            {
+                if(j != i)
+                {
+                    Dataset newTrainFold = new Dataset(foldPaths[j]);
+                    newTrainFold.setClassIndex(classIndex);
+                    trainFolds.add(newTrainFold.data);
+                }
+            } 
+            
+            // Merge training folds into single training set
+            Instances trainingSet = makeTrainingSet(trainFolds);
+            // Build and evaluate model based on training data
+            neuralNetwork.buildClassifier(trainingSet);
+            eval  = new Evaluation(trainingSet);
+            eval.evaluateModel(neuralNetwork, trainingSet);
+            System.out.println("Training evaluation - Fold " + i + ": " + eval.pctCorrect() + "% Correct");
+            System.out.println("                              " + eval.pctIncorrect() + "% Incorrect");
+            
+            //  Test and evaluate model on testing data
+            eval  = new Evaluation(testFold.data);
+            eval.evaluateModel(neuralNetwork, testFold.data);
+            modelEvaluations.add(eval);
+            System.out.println("Testing evaluation - Fold " + i + ": " + eval.pctCorrect() + "% Correct");
+            System.out.println("                             " + eval.pctIncorrect() + "% Incorrect");
+        }   
+    }
+    
+    /**
+     * Construct a single training dataset from a collection of folds derived from a single set.
+     * The training folds set excludes the fold to be tested. 
+     * 
+     * @param trainFolds
+     * @return
+     */
+    public static Instances makeTrainingSet(ArrayList<Instances> trainFolds)
+    {
+        Instances trainingSet;
+        
+        // Initialize trainingSet using attributes from a training fold
+        trainingSet = new Instances(trainFolds.get(0), 0);
+        
+        // Add all instances from all folds to trainingSet
+        for(Instances fold : trainFolds)
+        {
+            for(int i = 0; i < fold.numInstances(); i++)
+            {
+                trainingSet.add(fold.instance(i));
+            }
+        }
+        
+        return trainingSet;
+    }
+    
     /**
      * Splits the given dataset across several folds. The data in each fold is saved
      * to path_fold_i.arff where i is the fold number and path is the given base
@@ -61,9 +155,9 @@ public class TransactionClassifier
      * @param numFolds The number of folds
      * @param path     The base path to save fold data to
      */
-    public static ArrayList<Dataset> splitData(Dataset dataset, int numFolds, String path)
+    public static String[] splitData(Dataset dataset, int numFolds, String path)
     {
-
+        String paths[] = new String[numFolds];
         DatasetSplitter splitter = new DatasetSplitter(dataset);
 
         splitter.initFolds(numFolds);
@@ -79,15 +173,15 @@ public class TransactionClassifier
             try
             {
                 DataSink.write(foldPath, folds.get(i).data);
-                folds.get(i).loadData(foldPath);
+                paths[i] = foldPath;
+                //folds.get(i).loadData(foldPath);
             } catch (Exception e)
             {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
         }
 
-        return folds;
+        return paths;
     }
 
     /**
