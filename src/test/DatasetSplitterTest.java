@@ -16,6 +16,8 @@ import org.junit.Test;
 import com.jordanml.TransactionClassifier.Dataset;
 import com.jordanml.TransactionClassifier.DatasetSplitter;
 
+import weka.core.Instances;
+
 /**
  * @author Jordan
  *
@@ -35,7 +37,7 @@ public class DatasetSplitterTest
     {
         testSource = "../data/breast-cancer.arff";
         testDataset = new Dataset(testSource);
-        testSplitter = new DatasetSplitter(testDataset);
+        testSplitter = new DatasetSplitter(testDataset.getInstances());
     }
 
     /**
@@ -45,7 +47,7 @@ public class DatasetSplitterTest
     @Test
     public void testDatasetSplitter()
     {
-        testSplitter = new DatasetSplitter(testDataset);
+        testSplitter = new DatasetSplitter(testDataset.getInstances());
         assertEquals(0, testSplitter.getFolds().size());
         assertEquals(testDataset.numInstances(), testSplitter.getSource().numInstances());
     }
@@ -102,5 +104,14 @@ public class DatasetSplitterTest
         testSplitter.initFolds(numFolds);
         //Folds initialized, should return true once complete
         assertEquals(true, testSplitter.splitData());
+    }
+    
+    @Test
+    public void getSource()
+    {
+        Instances source = testSplitter.getSource();
+        assertNotNull(source);
+        assertEquals(testDataset.numAttributes(), source.numAttributes());
+        assertEquals(testDataset.numInstances(), source.numInstances());
     }
 }

@@ -1,6 +1,14 @@
 package test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.Assert.*;
+
+import java.util.ArrayList;
+
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import org.junit.jupiter.api.*;
 import com.jordanml.TransactionClassifier.Dataset;
@@ -13,13 +21,13 @@ import weka.core.Instance;
  * @author Jordan
  *
  */
-class DatasetTest
+public class DatasetTest
 {
 
     public static Dataset defaultDataset, nominalClass, numericalClass, testDataset;
 
-    @BeforeEach
-    void iniTestDataset()
+    @Before
+    public void iniTestDataset()
     {
         try
         {
@@ -27,7 +35,8 @@ class DatasetTest
             testDataset = new Dataset();
             numericalClass = new Dataset("../data/creditcard.arff");
             nominalClass = new Dataset("../data/creditcard_nom.arff");
-        } catch (Exception e)
+        }
+        catch (Exception e)
         {
             System.out.println("Could not load data");
             System.err.println(e.getMessage());
@@ -38,13 +47,14 @@ class DatasetTest
      * Test default constructor instantiation
      */
     @Test
-    void testDataset()
+    public void testDataset()
     {
 
         try
         {
             new Dataset();
-        } catch (Exception e)
+        } 
+        catch (Exception e)
         {
             fail(e.getMessage());
         }
@@ -54,13 +64,14 @@ class DatasetTest
      * Test instantiation with existing file as parameter
      */
     @Test
-    void testDatasetStringExistingFile()
+    public void testDatasetStringExistingFile()
     {
 
         try
         {
             new Dataset("../data/creditcard_nom.arff");
-        } catch (Exception e)
+        } 
+        catch (Exception e)
         {
             fail(e.getMessage());
         }
@@ -70,13 +81,13 @@ class DatasetTest
      * Test instantiation with non-existent file
      */
     @Test
-    void testDatasetStringError()
+    public void testDatasetStringError()
     {
-
         try
         {
             new Dataset("");
-        } catch (Exception e)
+        } 
+        catch (Exception e)
         {
 
         }
@@ -86,13 +97,14 @@ class DatasetTest
      * Test constructor w/ Instances object as parameter
      */
     @Test
-    void testDatasetInstances()
+    public void testDatasetInstances()
     {
 
         try
         {
             new Dataset(nominalClass.data);
-        } catch (Exception e)
+        }
+        catch (Exception e)
         {
             fail("Could not load data");
         }
@@ -102,28 +114,26 @@ class DatasetTest
      * Test getters
      */
     @Test
-    void testGetPath()
+    public void testGetPath()
     {
-
-        assertEquals("../data/creditcard_nom.arff", nominalClass.getPath(),
-                "Overridden constructor should initialize path to provided path");
-        assertEquals(null, defaultDataset.getPath(), "Default constructor should initialize path to null");
+        assertEquals("Overridden constructor should initialize path to provided path", "../data/creditcard_nom.arff", nominalClass.getPath());
+        assertEquals("Default constructor should initialize path to null", null, defaultDataset.getPath());
     }
 
     @Test
-    void testNumInstances()
+    public void testNumInstances()
     {
 
-        assertEquals(284807, nominalClass.numInstances(), "Num instances did not return correct number of instances");
-        assertEquals(0, defaultDataset.numInstances(), "Null dataset should have 0 instances");
+        assertEquals(284807, nominalClass.numInstances());
+        assertEquals(0, defaultDataset.numInstances());
     }
 
     @Test
-    void testNumAttributes()
+    public void testNumAttributes()
     {
 
-        assertEquals(31, nominalClass.numAttributes(), "Num attributes did not return correct number of attributes");
-        assertEquals(0, defaultDataset.numAttributes(), "Null dataset should have 0 attributes");
+        assertEquals(31, nominalClass.numAttributes());
+        assertEquals(0, defaultDataset.numAttributes());
     }
 
     /**
@@ -131,7 +141,7 @@ class DatasetTest
      * attributes, path, and data.
      */
     @Test
-    void testLoadData()
+    public void testLoadData()
     {
 
         try
@@ -151,7 +161,7 @@ class DatasetTest
      * Test loading data from Instances object into empty Dataset
      */
     @Test
-    void testLoadDataInstances()
+    public void testLoadDataInstances()
     {
 
         try
@@ -172,11 +182,11 @@ class DatasetTest
      * Test checking Dataset to see if data exists
      */
     @Test
-    void testHasData()
+    public void testHasData()
     {
 
-        assertEquals(true, nominalClass.hasData(), "data should not be null");
-        assertEquals(false, defaultDataset.hasData(), "data should be null");
+        assertEquals("Data should not be null", true, nominalClass.hasData());
+        assertEquals("Data should be null", false, defaultDataset.hasData());
     }
 
     /**
@@ -184,7 +194,7 @@ class DatasetTest
      * set
      */
     @Test
-    void testDiscretizeNominalClass()
+    public void testDiscretizeNominalClass()
     {
         nominalClass.data.setClassIndex(nominalClass.numAttributes() - 1);
 
@@ -203,58 +213,24 @@ class DatasetTest
      * exception should be thrown.
      */
     @Test
-    void testDiscretizeNumericalClass()
+    public void testDiscretizeNumericalClass()
     {
-
         numericalClass.data.setClassIndex(numericalClass.numAttributes() - 1);
 
-        try
-        {
-            numericalClass.discretize("../data/test/numericalClassShouldFail.arff");
-            fail("Expected exception");
-        } catch (Exception e)
-        {
-            System.err.println(e.getMessage());
-        }
+        assertEquals("Should return null", null, numericalClass.discretize("../data/test/numericalClassShouldFail.arff"));
     }
-
-    /**
-     * Test discretization with dataset that has a nominal class and class index is
-     * set. In this test, the call to the discretize method uses null as the file
-     * path argument. Prior to discretization, path should be set to the path to the
-     * file used as the dataset souce. After discretization, path should be set to
-     * null because the dataset was discretized and no path was specified in order
-     * to save the file.
-     */
-    @Test
-    void testDiscretizeReplaceData()
-    {
-
-        nominalClass.data.setClassIndex(nominalClass.numAttributes() - 1);
-
-        try
-        {
-            assertEquals("../data/creditcard_nom.arff", nominalClass.getPath(), "Path should match set path");
-            nominalClass.discretize(null);
-            assertEquals(null, nominalClass.getPath(), "Path should be null after replacing data");
-        } catch (Exception e)
-        {
-            fail("Should not reach exception");
-        }
-
-    }
-
+    
     /**
      * Test discretization with dataset that does not have class index set (class
      * index == -1) Class index must be set for discretization.
      */
     @Test
-    void testDiscretizeNoClassIndex()
+    public void testDiscretizeNoClassIndex()
     {
         // did not set class index
         try
         {
-            assertEquals(false, numericalClass.discretize(null), "Should return false when class index is not set");
+            assertEquals("Should return null when class index is not set", null, numericalClass.discretize(null));
         } catch (Exception e)
         {
             fail("Should not reach exception");
@@ -266,7 +242,7 @@ class DatasetTest
      * Test adding an Instance object to the Instances data object in a Dataset
      */
     @Test
-    void testAddInstance()
+    public void testAddInstance()
     {
 
         int numInstances = nominalClass.numInstances();
