@@ -1,8 +1,5 @@
 package com.jordanml.TransactionClassifier;
 
-import java.io.File;
-import java.io.IOException;
-
 import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.converters.ConverterUtils.DataSink;
@@ -91,6 +88,27 @@ public class Dataset
             return data.numAttributes();
         else
             return 0;
+    }
+    
+    /**
+     * Gets the class index of the dataset
+     * @return int - the class index 
+     */
+    public int classIndex()
+    {
+        if(data != null)
+            return data.classIndex();
+        else
+            return -1;
+    }
+    
+    /**
+     * Gets the Instances object representing the dataset
+     * @return the Instances object representing the dataset
+     */
+    public Instances getInstances()
+    {
+        return data;
     }
 
     /**
@@ -186,12 +204,14 @@ public class Dataset
      * Discretize data using WEKA implementation of Fayyad & Irani MDL
      * discretization. See WEKA 3-8-2 Manual p.219.
      * 
-     * @param savePath Path to save discretized data to. The file extension (.arff
-     *                 or .csv) is specified when providing savePath.
+     * @param savePath Path to save discretized data to. The file extension (.arff or .csv) is specified when providing savePath.
+     *
+     * @return Returns the discretized data                 
      */
     public Instances discretize(String savePath)
     {
-
+        
+        // Check for class index being set
         if (data.classIndex() == -1)
         {
             System.err.println("Class index not set. Set class index prior to discretization.");
@@ -216,7 +236,7 @@ public class Dataset
         } 
         catch (Exception e)
         {
-            System.out.println("Error discretizing data");
+            System.out.println("Error discretizing data:");
             System.err.println(e.getMessage());
             return null;
         } 
