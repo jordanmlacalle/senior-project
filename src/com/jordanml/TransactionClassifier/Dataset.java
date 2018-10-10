@@ -102,6 +102,25 @@ public class Dataset
     {
         data.setClassIndex(classIndex);
     }
+    
+    /**
+     * Saves data to a file with the given path
+     * 
+     * @throws  Exception
+     */
+    public boolean saveFile(String path)
+    {
+        try
+        {
+            DataSink.write(path, data);
+            this.path = path;
+            return true;
+        }
+        catch(Exception e)
+        {
+            return false;
+        }
+    }
 
     /**
      * Checks if the dataset has data loaded
@@ -170,13 +189,13 @@ public class Dataset
      * @param savePath Path to save discretized data to. The file extension (.arff
      *                 or .csv) is specified when providing savePath.
      */
-    public boolean discretize(String savePath) throws Exception
+    public Instances discretize(String savePath)
     {
 
         if (data.classIndex() == -1)
         {
-            System.out.println("Class index not set. Set class index prior to discretization.");
-            return false;
+            System.err.println("Class index not set. Set class index prior to discretization.");
+            return null;
         }
 
         Instances discretizedData = null;
@@ -187,40 +206,19 @@ public class Dataset
             // discretize data
             discretizer.setInputFormat(data);
             discretizedData = Filter.useFilter(data, discretizer);
-
-        } catch (Exception e)
+            
+            if(savePath != null)
+            {
+                DataSink.write(savePath, discretizedData);
+            }
+            
+            return discretizedData;
+        } 
+        catch (Exception e)
         {
             System.out.println("Error discretizing data");
             System.err.println(e.getMessage());
-            throw e;
-        } finally
-        {
-            // replace data with discretized data
-            data = discretizedData;
-
-            if (savePath == null)
-            {
-                // did not save data, so set path to null
-                path = null;
-            } else
-            {
-                /*
-                 * Save discretized data to new file. See WEKA 3-8-2 Manual p.238. The
-                 * DataSink.write method can save to both .arff and .csv
-                 */
-                path = savePath;
-                try
-                {
-                    DataSink.write(savePath, discretizedData);
-                } catch (Exception e)
-                {
-                    System.err.println("Error saving discretized data to " + savePath);
-                    System.err.println(e.getMessage());
-                    throw e;
-                }
-            }
-        }
-
-        return true;
+            return null;
+        } 
     }
 }

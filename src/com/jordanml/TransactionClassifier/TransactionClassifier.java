@@ -5,27 +5,34 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
 
+// RSESLIB
 import rseslib.processing.reducts.AllGlobalReductsProvider;
-
 import rseslib.structure.table.ArrayListDoubleDataTable;
 import rseslib.structure.table.DoubleDataTable;
 import rseslib.system.Report;
 import rseslib.system.output.StandardErrorOutput;
 import rseslib.system.output.StandardOutput;
 import rseslib.system.progress.StdOutProgress;
+
+// WEKA
 import weka.classifiers.Evaluation;
 import weka.classifiers.functions.MultilayerPerceptron;
 import weka.core.Instances;
 import weka.core.converters.ConverterUtils.DataSink;
+import weka.filters.Filter;
+import weka.filters.unsupervised.attribute.Remove;
 
 public class TransactionClassifier
 {
 
+    public static final int POSITIVE_CLASS_INDEX = 1;
+    
     public static void main(String[] args)
     {
-
-        String filepath = "../data/credit-g.arff";
+        long start = System.nanoTime();
+        String filepath = "../data/breast-cancer.arff";
         Dataset testData = new Dataset(filepath);
+        testData.setClassIndex(testData.numAttributes() - 1);
         final int numFolds = 10;
 
         // Ensure that dataset was loaded
@@ -33,23 +40,17 @@ public class TransactionClassifier
         {
             System.out.println("No dataset loaded");
             return;
-        } else
+        } 
+        else
         {
             System.out.println(testData.getPath() + " has...");
             System.out.println(testData.numInstances() + " instances");
             System.out.println(testData.numAttributes() + " attributes");
         }
 
-        try
-        {
-            classifierTrial(testData, testData.numAttributes()-1, numFolds);
-        } catch (Exception e)
-        {
-            System.err.println("Classifier failed");
-            e.printStackTrace();
-        }
-
-        System.out.println("Terminating");
+        classifierTrial(testData, testData.numAttributes()-1, numFolds);
+        long end = System.nanoTime();
+        System.out.println("Terminating: " + (end - start));
     }
 
     /**
@@ -60,10 +61,15 @@ public class TransactionClassifier
      * 
      * @throws Exception
      */
-    public static void classifierTrial(Dataset dataset, int classIndex, int numFolds) throws Exception
+    public static void classifierTrial(Dataset dataset, int classIndex, int numFolds)
     {
         dataset.setClassIndex(classIndex);
+        
+        // TEMPORARY - time this
+        long start = System.nanoTime();
         String foldPaths[] = splitData(dataset, numFolds, "../data/test/testData");
+        long end = System.nanoTime();
+        System.out.println("Splitting took: " + (end-start)/1000000);
         ArrayList<Evaluation> modelEvaluations = new ArrayList<Evaluation>();
         
         // 10-CV loop tasks:
@@ -80,10 +86,13 @@ public class TransactionClassifier
         {
             System.out.println("\nBuilding model to test on fold " + i + ":");
             
-            Dataset testFold = new Dataset(foldPaths[i]);
-            testFold.setClassIndex(classIndex);
+            Dataset testSet = new Dataset(foldPaths[i]);
+            testSet.setClassIndex(classIndex);
+            Dataset trainingSet;
             ArrayList<Instances> trainFolds = new ArrayList<Instances>();
             MultilayerPerceptron neuralNetwork = new MultilayerPerceptron();
+            neuralNetwork.setLearningRate(0.1);
+            //neuralNetwork.setHiddenLayers("a");
             
             /**
              * eval will run classifier on a dataset and generate statistics 
@@ -103,21 +112,103 @@ public class TransactionClassifier
             } 
             
             // Merge training folds into single training set
-            Instances trainingSet = makeTrainingSet(trainFolds);
+            // Instances trainingSet = makeTrainingSet(trainFolds);
+            trainingSet = new Dataset(makeTrainingSet(trainFolds));
+            trainFolds.clear();
+            trainingSet.saveFile("../data/trainingSet_" + i + ".arff");
+            // Preprocess data using reduct with largest reduction in dimensionality
+            BitSet reductBitSet = findReducts(trainingSet, "../data/disc_trainingSet_" + i + ".arff");
+            trainingSet.saveFile("../data/trainingSet_" + i + "_afterDisc.arff");
+            
+            // Remove attributes from training set and test set according to reduct
+            try
+            {
+                trainingSet = applyReduct(reductBitSet, trainingSet);
+                testSet = applyReduct(reductBitSet, testSet);
+            }
+            catch(Exception e)
+            {
+                System.err.println("Could not apply reducts: ");
+                e.printStackTrace();
+                return;
+            }
+            
             // Build and evaluate model based on training data
-            neuralNetwork.buildClassifier(trainingSet);
-            eval  = new Evaluation(trainingSet);
-            eval.evaluateModel(neuralNetwork, trainingSet);
-            System.out.println("Training evaluation - Fold " + i + ": " + eval.pctCorrect() + "% Correct");
-            System.out.println("                              " + eval.pctIncorrect() + "% Incorrect");
+            try
+            {
+                eval = new Evaluation(trainingSet.data);
+                neuralNetwork.buildClassifier(trainingSet.data);
+                eval.evaluateModel(neuralNetwork, trainingSet.data);
+                System.out.println("Model built on training set");
+                System.out.println("Training evaluation - Fold " + i + ": " + eval.pctCorrect() + "% Correct");
+                System.out.println("                              " + eval.pctIncorrect() + "% Incorrect");
+            }
+            catch(Exception e)
+            {
+                System.err.println("Could not run classifier on training data: " + e.getMessage());
+                return;
+            }
             
             //  Test and evaluate model on testing data
-            eval  = new Evaluation(testFold.data);
-            eval.evaluateModel(neuralNetwork, testFold.data);
-            modelEvaluations.add(eval);
-            System.out.println("Testing evaluation - Fold " + i + ": " + eval.pctCorrect() + "% Correct");
-            System.out.println("                             " + eval.pctIncorrect() + "% Incorrect");
+            try
+            {
+                eval  = new Evaluation(testSet.data);
+                eval.evaluateModel(neuralNetwork, testSet.data);
+                modelEvaluations.add(eval);
+                System.out.println("Testing evaluation - Fold " + i + ": " + eval.pctCorrect() + "% Correct");
+                System.out.println("                             " + eval.pctIncorrect() + "% Incorrect");
+
+            }
+            catch(Exception e)
+            {
+                System.err.println("Could not run classifier on test set: ");
+                e.printStackTrace();
+                return;
+            }
         }   
+        
+        // Build confusion matrix
+        computeConfusionMatrix(modelEvaluations, POSITIVE_CLASS_INDEX);
+    }
+    
+    /**
+     * Applies the given reduct to the given dataset and returns the new dataset.
+     * All attributes that are not included in the given reduct are removed.
+     * 
+     * @param reduct BitSet representing the attributes that are included in the reduct
+     * @param dataset Dataset containing the data to be modified
+     * @return Returns the new dataset having attributes removed
+     * @throws Exception
+     */
+    public static Dataset applyReduct(BitSet reduct, Dataset dataset) throws Exception
+    {
+        // The indices to be kept
+        int indices[] = new int[reduct.cardinality() + 1];
+
+        int index = 0;
+        
+        // Add reduct attribute indices to indices array
+        for(int i = 0; i < dataset.numAttributes(); i++)
+        {
+            if(reduct.get(i) || i == dataset.data.classIndex())
+            {
+                    indices[index] = i;
+                    index++; 
+            }
+        }
+        
+        /**
+         * Remove all attributes that are not part of the reduct
+         */
+        Remove removeReduct = new Remove();
+        removeReduct.setAttributeIndicesArray(indices);
+        // Invert selection because we want to KEEP the attributes in indices
+        removeReduct.setInvertSelection(true);
+        removeReduct.setInputFormat(dataset.data);
+        Dataset modifiedData = new Dataset(Filter.useFilter(dataset.data, removeReduct));
+        modifiedData.setClassIndex(modifiedData.numAttributes() - 1);
+        
+        return modifiedData;
     }
     
     /**
@@ -207,13 +298,15 @@ public class TransactionClassifier
 
     }
 
-    public static void findReducts(Dataset dataset)
+    public static BitSet findReducts(Dataset dataset, String discPath)
     {
-
-        if (dataset.getPath().equals(null))
+        // Discretize the data and save to a new file, this file will be loaded again and used to compute reducts
+        if(null == dataset.discretize(discPath))
         {
-            return;
+            System.err.println("Could not discretize data");
+            return null;
         }
+        
         /*
          * rseslib uses a different file format than WEKA, so data loading must be
          * handled separately for reduct selection.
@@ -231,7 +324,7 @@ public class TransactionClassifier
             /*
              * Prepare reduct provider
              */
-            DoubleDataTable table = new ArrayListDoubleDataTable(new File(dataset.getPath()), new StdOutProgress());
+            DoubleDataTable table = new ArrayListDoubleDataTable(new File(discPath), new StdOutProgress());
             AllGlobalReductsProvider reductsProvider = new AllGlobalReductsProvider(null, table);
 
             /*
@@ -239,25 +332,49 @@ public class TransactionClassifier
              */
             Collection<BitSet> reducts = reductsProvider.getReducts();
 
-            // Test getting a single reduct
+            // Get the first reduct (it offers the most reduction in dimensionality)
             Object reductsArray[] = reducts.toArray();
-            ArrayList<BitSet> intArray = new ArrayList<BitSet>();
-            intArray.add((BitSet) reductsArray[0]);
-            BitSet currentReduct = intArray.get(0);
+            ArrayList<BitSet> reductsList = new ArrayList<BitSet>();
+            reductsList.add((BitSet) reductsArray[0]);
+            BitSet firstReduct = reductsList.get(0);
 
             // Print all reducts
-            System.out.println(currentReduct);
+            System.out.println(firstReduct);
             Report.displaynl(reducts);
             Report.close();
             System.out.println();
+            
+            return firstReduct;
 
         } catch (Exception e)
         {
             System.out.println("Could not compute reducts");
             System.err.println(e.getMessage());
-        } finally
-        {
-            System.out.println("Computed reducts");
+            return null;
         }
+    }
+    
+    private static void computeConfusionMatrix(ArrayList<Evaluation> modelEvaluations, int positiveClassIndex)
+    {
+        double totalTP = 0;
+        double totalFP = 0;
+        double totalTN = 0;
+        double totalFN = 0;
+        
+        for(Evaluation eval : modelEvaluations)
+        {
+            totalTP += eval.numTruePositives(positiveClassIndex);
+            totalFP += eval.numFalsePositives(positiveClassIndex);
+            totalTN += eval.numTrueNegatives(positiveClassIndex);
+            totalFN += eval.numFalseNegatives(positiveClassIndex);
+        }
+        
+        System.out.println(" True Positives: " + totalTP);
+        System.out.println("False Positives: " + totalFP);
+        System.out.println(" True Negatives: " + totalTN);
+        System.out.println("False Negatives: " + totalFN);
+        System.out.println("       Accuracy: " + (totalTP + totalTN) / (totalFP + totalFN));
+        System.out.println("   Predictivity: " + (totalTP / (totalTP + totalFP)));
+        System.out.println("    Selectivity: " + (totalTN / (totalTN + totalFP)));
     }
 }

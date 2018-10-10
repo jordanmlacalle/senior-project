@@ -54,7 +54,6 @@ public class DatasetSplitter
         possibleClasses = new String[numClasses];
         folds = new ArrayList<Dataset>();
         
-        
         for(int i = 0; i < numClasses; i++)
         {
             possibleClasses[i] = sourceData.classAttribute().value(i);
@@ -112,32 +111,25 @@ public class DatasetSplitter
         Random random = new Random();
         float rand;
         int selectedFold = -1;
-        int currentInstance = 0;
+        int currentInstance = 1;
 
         // Set the number of instances of each class that each fold expects when splitting is done
         setInstancesRequired();
 
         // Loop until all Instances have been distributed
-        while (currentInstance < sourceData.numInstances())
+        while (sourceData.numInstances() != 0)
         {
+            // System.out.println("Adding instance: " + currentInstance);
             // Get copy of current instance
-            Instance copy = (Instance) sourceData.instance(currentInstance).copy();
+            Instance copy = (Instance) sourceData.instance(0).copy();
+            sourceData.delete(0);
             
             // Get class value index
             int classValueIndex = getClassValueIndex(copy);
-            
-            // Set the fitnesses
-            setFitnesses(classValueIndex);
-
-            // Sum all fitnesses for the current class value
-            for(int i = 0; i < numFolds; i++)
-            {
-                fitnessSum += fitnesses[classValueIndex][i];
-            }
-              
+            // Set the fitnesses and get the sum of those fitnesses
+            fitnessSum = setFitnesses(classValueIndex);
             // Set probabilities based on fitnessSum for the current class value
             setProbabilities(classValueIndex, fitnessSum);
-
             // Get new random number
             rand = random.nextFloat();
             
@@ -170,10 +162,11 @@ public class DatasetSplitter
      * 
      * @param classValueIndex the index for the class value of the current instance
      */
-    private void setFitnesses(int classValueIndex)
+    private int setFitnesses(int classValueIndex)
     {        
         Instances foldData;
         int classCounts[];
+        int fitnessSum = 0;
         
         for(int i = 0; i < folds.size(); i++)
         {
@@ -183,7 +176,10 @@ public class DatasetSplitter
             classCounts = foldData.attributeStats(classIndex).nominalCounts;
             // Fitness = required instances of current class - instances had from current class
             fitnesses[classValueIndex][i] = instancesRequired[classValueIndex][i] - classCounts[classValueIndex];
+            fitnessSum += fitnesses[classValueIndex][i];
         }
+        
+        return fitnessSum;
     }
 
     /**
