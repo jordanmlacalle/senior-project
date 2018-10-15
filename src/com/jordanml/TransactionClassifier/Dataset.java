@@ -1,8 +1,5 @@
 package com.jordanml.TransactionClassifier;
 
-import java.io.File;
-import java.io.IOException;
-
 import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.converters.ConverterUtils.DataSink;
@@ -57,11 +54,21 @@ public class Dataset
     /**
      * Getters
      */
+    /**
+     * Gets path to dataset arff or csv
+     * 
+     * @return String - path to the dataset arff or csv
+     */
     public String getPath()
     {
         return path;
     }
 
+    /**
+     * Gets number of instances in dataset
+     * 
+     * @return int - the number of instances in the dataset
+     */
     public int numInstances()
     {
         if (data != null)
@@ -70,6 +77,11 @@ public class Dataset
             return 0;
     }
 
+    /**
+     * Gets number of attributes in dataset
+     * 
+     * @return int - the number of attributes in the dataset
+     */
     public int numAttributes()
     {
         if (data != null)
@@ -77,12 +89,62 @@ public class Dataset
         else
             return 0;
     }
-
-    public void addInstance(Instance instance)
+    
+    /**
+     * Gets the class index of the dataset
+     * @return int - the class index 
+     */
+    public int classIndex()
     {
-        data.add(instance);
+        if(data != null)
+            return data.classIndex();
+        else
+            return -1;
+    }
+    
+    /**
+     * Gets the Instances object representing the dataset
+     * @return the Instances object representing the dataset
+     */
+    public Instances getInstances()
+    {
+        return data;
     }
 
+    /**
+     * Sets the class index
+     * 
+     * @param classIndex The index of the class attribute
+     */
+    public void setClassIndex(int classIndex)
+    {
+        data.setClassIndex(classIndex);
+    }
+    
+    /**
+     * Saves data to a file with the given path
+     * 
+     * @throws  Exception
+     */
+    public boolean saveFile(String path)
+    {
+        try
+        {
+            DataSink.write(path, data);
+            this.path = path;
+            return true;
+        }
+        catch(Exception e)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * Checks if the dataset has data loaded
+     * 
+     * @return boolean - true if the dataset has loaded data
+     */
     public boolean hasData()
     {
         if (data == null)
@@ -91,6 +153,16 @@ public class Dataset
         }
 
         return true;
+    }
+    
+    /**
+     * Adds an Instance to the dataset
+     * 
+     * @param instance the Instance to be added to the dataset
+     */
+    public void addInstance(Instance instance)
+    {
+        data.add(instance);
     }
 
     /**
@@ -132,16 +204,18 @@ public class Dataset
      * Discretize data using WEKA implementation of Fayyad & Irani MDL
      * discretization. See WEKA 3-8-2 Manual p.219.
      * 
-     * @param savePath Path to save discretized data to. The file extension (.arff
-     *                 or .csv) is specified when providing savePath.
+     * @param savePath Path to save discretized data to. The file extension (.arff or .csv) is specified when providing savePath.
+     *
+     * @return Returns the discretized data                 
      */
-    public boolean discretize(String savePath) throws Exception
+    public Instances discretize(String savePath)
     {
-
+        
+        // Check for class index being set
         if (data.classIndex() == -1)
         {
-            System.out.println("Class index not set. Set class index prior to discretization.");
-            return false;
+            System.err.println("Class index not set. Set class index prior to discretization.");
+            return null;
         }
 
         Instances discretizedData = null;
@@ -152,40 +226,19 @@ public class Dataset
             // discretize data
             discretizer.setInputFormat(data);
             discretizedData = Filter.useFilter(data, discretizer);
-
-        } catch (Exception e)
-        {
-            System.out.println("Error discretizing data");
-            System.err.println(e.getMessage());
-            throw e;
-        } finally
-        {
-            // replace data with discretized data
-            data = discretizedData;
-
-            if (savePath == null)
+            
+            if(savePath != null)
             {
-                // did not save data, so set path to null
-                path = null;
-            } else
-            {
-                /*
-                 * Save discretized data to new file. See WEKA 3-8-2 Manual p.238. The
-                 * DataSink.write method can save to both .arff and .csv
-                 */
-                path = savePath;
-                try
-                {
-                    DataSink.write(savePath, discretizedData);
-                } catch (Exception e)
-                {
-                    System.err.println("Error saving discretized data to " + savePath);
-                    System.err.println(e.getMessage());
-                    throw e;
-                }
+                DataSink.write(savePath, discretizedData);
             }
-        }
-
-        return true;
+            
+            return discretizedData;
+        } 
+        catch (Exception e)
+        {
+            System.out.println("Error discretizing data:");
+            System.err.println(e.getMessage());
+            return null;
+        } 
     }
 }

@@ -43,17 +43,16 @@ public class DatasetSplitter
     private int classIndex;
     private String possibleClasses[];
     
-    public DatasetSplitter(Dataset source)
+    public DatasetSplitter(Instances source)
     {
         foldsInitialized = false;
-        sourceData = new Instances(source.data);
+        sourceData = new Instances(source);
         sourceData.setClassIndex(sourceData.numAttributes() - 1);
         template = new Instances(sourceData, 0);
         numClasses = sourceData.classAttribute().numValues();
         classIndex = sourceData.classIndex();
         possibleClasses = new String[numClasses];
         folds = new ArrayList<Dataset>();
-        
         
         for(int i = 0; i < numClasses; i++)
         {
@@ -107,85 +106,78 @@ public class DatasetSplitter
          * selectedFold - the fold to add the current instance to
          * currentInstance - the instance from the source dataset that is currently under consideration
          */
-        int numFolds = folds.size();
-        int fitnessSum = 0;
         Random random = new Random();
         float rand;
-        int selectedFold = -1;
-        int currentInstance = 0;
+        int fitnessSum, selectedFold;
 
         // Set the number of instances of each class that each fold expects when splitting is done
         setInstancesRequired();
-
+        setFitnesses();
+        
         // Loop until all Instances have been distributed
-        while (currentInstance < sourceData.numInstances())
+        while (sourceData.numInstances() != 0)
         {
+            // Reset selectedFold < 0
+            selectedFold = -1;
+            
+            // System.out.println("Adding instance: " + currentInstance);
             // Get copy of current instance
-            Instance copy = (Instance) sourceData.instance(currentInstance).copy();
+            Instance copy = (Instance) sourceData.instance(0).copy();
+            sourceData.delete(0);
             
-            // Get class value index
+            // Get class value index and calculate fitness sum and update probabilities based on class value index
             int classValueIndex = getClassValueIndex(copy);
-            
-            // Set the fitnesses
-            setFitnesses(classValueIndex);
-
-            // Sum all fitnesses for the current class value
-            for(int i = 0; i < numFolds; i++)
-            {
-                fitnessSum += fitnesses[classValueIndex][i];
-            }
-              
-            // Set probabilities based on fitnessSum for the current class value
+            fitnessSum = sumFitnesses(classValueIndex);
             setProbabilities(classValueIndex, fitnessSum);
-
             // Get new random number
             rand = random.nextFloat();
             
-            int i = 0;
+            int currentFold = 0;
             // Find the fold for which the random number falls in the probability range
             while (selectedFold < 0)
             {
-                int result = Float.compare(rand, probabilities[classValueIndex][i]);
+                int result = Float.compare(rand, probabilities[classValueIndex][currentFold]);
                 if (result < 0 || result == 0)
                 {
-                    selectedFold = i;
+                    selectedFold = currentFold;
                 }
-                i++;
+                currentFold++;
             }
             
             // Add instance to selected fold
             folds.get(selectedFold).addInstance(copy);
-            // Reset selectedFold, fitnessSum
-            selectedFold = -1;
-            fitnessSum = 0;
-            currentInstance++;
+            // Adjust fitness
+            fitnesses[classValueIndex][selectedFold]--;
         }
-        
         return true;
     }
 
     /**
-     * Sets the fitnesses for each fold. Fitness here is considered to be how many
-     * more instances a fold requires. 
-     * 
-     * @param classValueIndex the index for the class value of the current instance
+     * Sets the fitnesses for all folds and possible class values
      */
-    private void setFitnesses(int classValueIndex)
-    {        
-        Instances foldData;
-        int classCounts[];
+    private void setFitnesses()
+    {
+        System.arraycopy(instancesRequired, 0, fitnesses, 0, instancesRequired.length);
+    }
+    
+    /**
+     * Sums the fitnesses for the current class value
+     * 
+     * @param classValueIndex The index of the current class value
+     * @return The sum of the fitnesses
+     */
+    private int sumFitnesses(int classValueIndex)
+    {
+        int fitnessSum = 0;
         
         for(int i = 0; i < folds.size(); i++)
         {
-            // Get data from current fold
-            foldData = folds.get(i).data;
-            // Get counts of each class
-            classCounts = foldData.attributeStats(classIndex).nominalCounts;
-            // Fitness = required instances of current class - instances had from current class
-            fitnesses[classValueIndex][i] = instancesRequired[classValueIndex][i] - classCounts[classValueIndex];
+            fitnessSum += fitnesses[classValueIndex][i];
         }
+        
+        return fitnessSum;
     }
-
+    
     /**
      * Sets the probabilities for each fold. The probability determines the
      * likeliness that a fold is selected.
@@ -209,7 +201,6 @@ public class DatasetSplitter
      */
     private void setInstancesRequired()
     {
-        
         // Get count of each class
         AttributeStats stats = sourceData.attributeStats(classIndex);
         int classCounts[] = stats.nominalCounts;
@@ -259,6 +250,7 @@ public class DatasetSplitter
         
         return classValueIndex;
     }
+    
     /**
      * Returns the folds ArrayList
      * 
@@ -291,5 +283,4 @@ public class DatasetSplitter
     {
         return foldsInitialized;
     }
-
 }
