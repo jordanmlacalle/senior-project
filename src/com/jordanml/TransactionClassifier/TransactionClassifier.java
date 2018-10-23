@@ -1,6 +1,8 @@
 package com.jordanml.TransactionClassifier;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
@@ -9,6 +11,7 @@ import java.util.Collection;
 import rseslib.processing.reducts.AllGlobalReductsProvider;
 import rseslib.structure.table.ArrayListDoubleDataTable;
 import rseslib.structure.table.DoubleDataTable;
+// For reporting progress to console
 import rseslib.system.Report;
 import rseslib.system.output.StandardErrorOutput;
 import rseslib.system.output.StandardOutput;
@@ -30,160 +33,231 @@ public class TransactionClassifier
     public static void main(String[] args)
     {
         long start = System.nanoTime(); // Time that execution started
-        String filepath = "../data/creditcard_nom.arff";
-        Dataset testData = new Dataset(filepath);
-        testData.setClassIndex(testData.numAttributes() - 1);
-        final int numFolds = 10;
-
-        // Ensure that dataset was loaded
-        if (!testData.hasData())
-        {
-            System.out.println("No dataset loaded");
-            return;
-        } 
-        else
-        {
-            System.out.println(testData.getPath() + " has...");
-            System.out.println(testData.numInstances() + " instances");
-            System.out.println(testData.numAttributes() + " attributes");
-        }
-
-        classifierTrial(testData, testData.numAttributes()-1, numFolds);
+        checkArgs(args);
         long end = System.nanoTime(); // Time that execution ended
         System.out.println("Terminating: " + (end - start)/1000000);
     }
-
+    
     /**
+     * Checks the provided command-line arguments and proceeds appropriately
      * 
-     * @param dataset the source data
-     * @param classIndex the index to the class attribute
-     * @param numFolds the number of folds to use in cross validation
-     * 
-     * @throws Exception
+     * @param args The provided command-line arguments
      */
-    public static void classifierTrial(Dataset dataset, int classIndex, int numFolds)
+    public static void checkArgs(String[] args)
     {
-        dataset.setClassIndex(classIndex);
-        
-        // TEMPORARY - time this
-        long start = System.nanoTime();
-        String foldPaths[] = splitData(dataset, numFolds, "../data/test/testData");
-        long end = System.nanoTime();
-        System.out.println("Splitting took: " + (end-start)/1000000);
-        double totalTP = 0;
-        double totalFP = 0;
-        double totalTN = 0;
-        double totalFN = 0;
-        
-        // 10-CV loop tasks:
-        /**
-         * For each fold:
-         *      - Designate current fold as test fold
-         *      - Discretize all folds (including or excluding test fold?)
-         *      - Find reducts for folds
-         *      - Train on 9 training folds
-         *      - Test on testing fold
-         *      
-         */
-        for(int i = 0; i < numFolds; i++)
+        if(args.length < 1)
         {
-            System.out.println("\nBuilding model to test on fold " + i + ":");
-            
-            Dataset testSet = new Dataset(foldPaths[i]);
-            testSet.setClassIndex(classIndex);
-            Dataset trainingSet;
-            ArrayList<Instances> trainFolds = new ArrayList<Instances>();
-            MultilayerPerceptron neuralNetwork = new MultilayerPerceptron();
-            neuralNetwork.setLearningRate(0.2);
-            neuralNetwork.setTrainingTime(1000);
-            
-            /**
-             * eval will run classifier on a dataset and generate statistics 
-             * (false positives, true positives, etc. that can be used for confusion matrix)
-             */
-            Evaluation eval;
-            
-            // Load training folds and add them to the ArrayList
-            for(int j = 0; j < numFolds; j++)
+            System.out.println("No arguments provided");
+            printProperUsage();
+        }
+        else
+        {
+            // Check what mode the first argument specifies
+            switch(args[0].toLowerCase())
             {
-                if(j != i)
-                {
-                    Dataset newTrainFold = new Dataset(foldPaths[j]);
-                    newTrainFold.setClassIndex(classIndex);
-                    trainFolds.add(newTrainFold.data);
-                }
-            } 
-            
-            // Merge training folds into single training set
-            // Instances trainingSet = makeTrainingSet(trainFolds);
-            trainingSet = new Dataset(makeTrainingSet(trainFolds));
-            trainFolds.clear();
-            trainingSet.saveFile("../data/trainingSet_" + i + ".arff");
-            // Preprocess data using reduct with largest reduction in dimensionality
-            //TODO: Remove timing
-            long startReduct = System.nanoTime();
-            BitSet reductBitSet = findReducts(trainingSet, "../data/disc_trainingSet_" + i + ".arff");
-            long endReduct = System.nanoTime();
-            System.out.println("Time to discretize and find reduct: " + (endReduct - startReduct)/1000000);
-            trainingSet.saveFile("../data/trainingSet_" + i + "_afterDisc.arff");
-            
-            // Remove attributes from training set and test set according to reduct
-            try
-            {
-                trainingSet = applyReduct(reductBitSet, trainingSet);
-                testSet = applyReduct(reductBitSet, testSet);
+                case "split":
+                    // Check for proper arguments (a single file and number of folds)
+                    trySplit(args);
+                    break;
+                case "test-once":
+                    testOnce(args);
+                    break;
+                case "help":
+                    printProperUsage();
+                    break;
+                default:
+                    System.out.println("Invalid mode provided");
+                    printProperUsage();
+                    break;
             }
-            catch(Exception e)
-            {
-                System.err.println("Could not apply reducts: ");
-                e.printStackTrace();
-                return;
-            }
-            
-            // Build and evaluate model based on training data
-            try
-            {
-                eval = new Evaluation(trainingSet.getInstances());
-                neuralNetwork.setHiddenLayers(""+ trainingSet.numAttributes() + "," + trainingSet.numAttributes()/2);
-                neuralNetwork.buildClassifier(trainingSet.getInstances());
-            }
-            catch(Exception e)
-            {
-                System.err.println("Could not run classifier on training data: " + e.getMessage());
-                return;
-            }
-            
-            //  Test and evaluate model on testing data
-            try
-            {
-                eval  = new Evaluation(testSet.getInstances());
-                eval.evaluateModel(neuralNetwork, testSet.getInstances());
-                System.out.println("Testing evaluation - Fold " + i + ": " + eval.pctCorrect() + "% Correct");
-                System.out.println("                             " + eval.pctIncorrect() + "% Incorrect");
-                totalTP += eval.numTruePositives(POSITIVE_CLASS_INDEX);
-                totalFP += eval.numFalsePositives(POSITIVE_CLASS_INDEX);
-                totalTN += eval.numTrueNegatives(POSITIVE_CLASS_INDEX);
-                totalFN += eval.numFalseNegatives(POSITIVE_CLASS_INDEX);
-
-            }
-            catch(Exception e)
-            {
-                System.err.println("Could not run classifier on test set: ");
-                e.printStackTrace();
-                return;
-            }
-        }   
-        
-        // Build confusion matrix
-        System.out.println(" True Positives: " + totalTP);
-        System.out.println("False Positives: " + totalFP);
-        System.out.println(" True Negatives: " + totalTN);
-        System.out.println("False Negatives: " + totalFN);
-        System.out.println("       Accuracy: " + (totalTP + totalTN) / (totalTP + totalTN + totalFP + totalFN));
-        System.out.println("   Predictivity: " + (totalTP / (totalTP + totalFP)));
-        System.out.println("    Selectivity: " + (totalTN / (totalTN + totalFP)));
+        }
     }
     
+    /**
+     * Splits a dataset into the specified number of folds and saves each fold as a separate .arff file.
+     * 
+     * @param args The command-line arguments
+     */
+    public static void trySplit(String[] args)
+    {
+        String filepath, savePath;
+        int numFolds;
+        Dataset dataset;
+        
+        // Check for proper number of arguments
+        if(args.length < 4)
+        {
+            System.out.println("Not enough arguments for mode 'split'");
+        }
+        else
+        {
+            filepath = args[1];
+            savePath = args[3];
+            
+            try
+            {
+                // Get integer from command-line argument
+                // An exception will be thrown if the argument is not an integer
+                numFolds = Integer.parseInt(args[2]);
+            }
+            catch(NumberFormatException e)
+            {
+                System.out.println("Expected an integer for number of folds");
+                printProperUsage();
+                return;
+            }
+            
+            // Load the data
+            dataset = new Dataset(filepath);
+            
+            if(!dataset.hasData())
+            {
+                System.out.println("No dataset loaded");
+                return;
+            }
+            else
+            {
+                // Split the data
+                splitData(dataset, numFolds, savePath, true);
+            }
+        }
+    }
+    
+    public static void testOnce(String[] args)
+    {
+        String filepathTrain, filepathTest, resultsPath;
+        Dataset trainingSet, testingSet;
+        
+        if(args.length < 4)
+        {
+            System.out.println("Not enough arguments for mode 'test-once'");
+            printProperUsage();
+        }
+        else
+        {
+            filepathTrain = args[1];
+            filepathTest = args[2];
+            resultsPath = args[3];
+            
+            // Load the training set
+            trainingSet = new Dataset(filepathTrain);
+            trainingSet.setClassIndex(trainingSet.numAttributes() - 1);
+            // Load the testing set
+            testingSet = new Dataset(filepathTest);
+            testingSet.setClassIndex(testingSet.numAttributes() - 1);
+            
+            if(!testingSet.hasData())
+            {
+                System.out.println("Could not load testing set");
+            }
+            else if(!trainingSet.hasData())
+            {
+                System.out.println("Could not load training set");
+            }
+            else
+            {
+                Evaluation results = testOnceClassify(trainingSet, testingSet);
+                
+                if(results == null)
+                {
+                    System.out.println("Could not run classifier");
+                }
+                else
+                {
+                    try
+                    {
+
+                        PrintWriter printResults = new PrintWriter(new FileWriter(resultsPath));
+                        printResults.printf("TP: %f%nFP: %f%nTN: %f%nFN: %f", results.numTruePositives(POSITIVE_CLASS_INDEX),
+                                                                              results.numFalsePositives(POSITIVE_CLASS_INDEX),
+                                                                              results.numTrueNegatives(POSITIVE_CLASS_INDEX),
+                                                                              results.numFalseNegatives(POSITIVE_CLASS_INDEX));
+                        printResults.close();
+                        System.out.println("Saved results to " + resultsPath);
+                    }
+                    catch(Exception e)
+                    {
+                        System.out.println("Could not save results");
+                    }
+                }
+            }
+        }
+    }
+
+    public static Evaluation testOnceClassify(Dataset trainingSet, Dataset testSet)
+    {
+        Evaluation eval;
+        MultilayerPerceptron neuralNetwork = new MultilayerPerceptron();
+        
+        // Preprocess data using reduct with largest reduction in dimensionality
+        //TODO: Remove timing
+        long startReduct = System.nanoTime();
+        BitSet reductBitSet = findReducts(trainingSet, trainingSet.getPath() + "_discretized.arff");
+        long endReduct = System.nanoTime();
+        System.out.println("Time to discretize and find reduct: " + (endReduct - startReduct)/1000000);
+        
+        // Remove attributes from training set and test set according to reduct
+        try
+        {
+            trainingSet = applyReduct(reductBitSet, trainingSet);
+            testSet = applyReduct(reductBitSet, testSet);
+        }
+        catch(Exception e)
+        {
+            System.err.println("Could not apply reducts: ");
+            e.printStackTrace();
+            return null;
+        }
+        
+        // Build and evaluate model based on training data
+        try
+        {
+            neuralNetwork.setHiddenLayers(""+ trainingSet.numAttributes() + "," + trainingSet.numAttributes()/2);
+            neuralNetwork.buildClassifier(trainingSet.getInstances());
+        }
+        catch(Exception e)
+        {
+            System.err.println("Could not run classifier on training data: " + e.getMessage());
+            return null;
+        }
+        
+        //  Test and evaluate model on testing data
+        try
+        {
+            eval  = new Evaluation(testSet.getInstances());
+            eval.evaluateModel(neuralNetwork, testSet.getInstances());
+            System.out.println("Testing evaluation: " + eval.pctCorrect() + "% Correct");
+            System.out.println("                    " + eval.pctIncorrect() + "% Incorrect");
+            return eval;
+        }
+        catch(Exception e)
+        {
+            System.err.println("Could not run classifier on test set: ");
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    public static void printProperUsage()
+    {
+        System.out.println("Usage: jml-classifier [mode] [args...]");
+        System.out.println("\nwhere modes include:");
+        System.out.println("    split <dataset> <folds> <savepath>");
+        System.out.println("          split a dataset into separate folds with similar class ratios");
+        System.out.println("          dataset : path to .arff file containing the target dataset");
+        System.out.println("          folds   : integer representing the desired number of folds");
+        System.out.println("          savepath: base path to save .arff files to");
+        System.out.println("\n    test-once <train> <test> <results>");
+        System.out.println("          builds and trains a neural network on a training set and evaluates");
+        System.out.println("          the model on the given testing set. Confusion matrix data is saved");
+        System.out.println("          in plain-text to the specified path");
+        System.out.println("          train  : path to the .arff file containing the training data");
+        System.out.println("          test   : path to the .arff file containing the testing data");
+        System.out.println("          results: path to save the confusion matrix data to");
+        System.out.println("    help");
+        System.out.println("          displays usage information");
+        System.out.println("Author: Jordan Moreno-Lacalle");
+    }
     /**
      * Applies the given reduct to the given dataset and returns the new dataset.
      * All attributes that are not included in the given reduct are removed.
@@ -231,23 +305,23 @@ public class TransactionClassifier
      * @param trainFolds
      * @return
      */
-    public static Instances makeTrainingSet(ArrayList<Instances> trainFolds)
+    public static Dataset makeTrainingSet(ArrayList<Dataset> trainFolds)
     {
         Instances trainingSet;
         
         // Initialize trainingSet using attributes from a training fold
-        trainingSet = new Instances(trainFolds.get(0), 0);
+        trainingSet = new Instances(trainFolds.get(0).getInstances(), 0);
         
         // Add all instances from all folds to trainingSet
-        for(Instances fold : trainFolds)
+        for(Dataset fold : trainFolds)
         {
             for(int i = 0; i < fold.numInstances(); i++)
             {
-                trainingSet.add(fold.instance(i));
+                trainingSet.add(fold.getInstances().instance(i));
             }
         }
         
-        return trainingSet;
+        return new Dataset(trainingSet);
     }
     
     /**
@@ -259,32 +333,49 @@ public class TransactionClassifier
      * @param numFolds The number of folds
      * @param path     The base path to save fold data to
      */
-    public static String[] splitData(Dataset dataset, int numFolds, String path)
+    public static String[] splitData(Dataset dataset, int numFolds, String path, boolean saveCombined)
     {
         String paths[] = new String[numFolds];
         DatasetSplitter splitter = new DatasetSplitter(dataset.getInstances());
 
         splitter.initFolds(numFolds);
+        System.out.print("Splitting dataset...");
         splitter.splitData();
+        System.out.println("Done.");
+        
+        if(saveCombined)
+            System.out.println("Saving individual and combined files...");
+        else
+            System.out.println("Saving individual files only...");
+        
         ArrayList<Dataset> folds = splitter.getFolds();
-
+        
         /**
-         * Save each fold's data
+         * Save each fold's data individually AND combined datasets
          */
         for (int i = 0; i < folds.size(); i++)
         {
             String foldPath = path + "_fold_" + i + ".arff";
+            
             try
             {
                 DataSink.write(foldPath, folds.get(i).getInstances());
                 paths[i] = foldPath;
                 //folds.get(i).loadData(foldPath);
+                if(saveCombined)
+                {
+                    ArrayList<Dataset> foldsCopy = new ArrayList<>(folds);
+                    foldsCopy.remove(i);
+                    
+                    DataSink.write(path + "_combined_excludes_" + i + ".arff", makeTrainingSet(foldsCopy).getInstances());
+                }
             }
             catch (Exception e)
             {
                 e.printStackTrace();
             }
         }
+        
         return paths;
     }
 
@@ -366,36 +457,5 @@ public class TransactionClassifier
             System.err.println(e.getMessage());
             return null;
         }
-    }
-    
-    
-    /**
-     * Build the confusion matrix from evaluation data for all loops of cross validation
-     * 
-     * @param modelEvaluations
-     * @param positiveClassIndex
-     */
-    private static void computeConfusionMatrix(ArrayList<Evaluation> modelEvaluations, int positiveClassIndex)
-    {
-        double totalTP = 0;
-        double totalFP = 0;
-        double totalTN = 0;
-        double totalFN = 0;
-        
-        for(Evaluation eval : modelEvaluations)
-        {
-            totalTP += eval.numTruePositives(positiveClassIndex);
-            totalFP += eval.numFalsePositives(positiveClassIndex);
-            totalTN += eval.numTrueNegatives(positiveClassIndex);
-            totalFN += eval.numFalseNegatives(positiveClassIndex);
-        }
-        
-        System.out.println(" True Positives: " + totalTP);
-        System.out.println("False Positives: " + totalFP);
-        System.out.println(" True Negatives: " + totalTN);
-        System.out.println("False Negatives: " + totalFN);
-        //System.out.println("       Accuracy: " + (totalTP + totalTN) / (totalFP + totalFN));
-        System.out.println("   Predictivity: " + (totalTP / (totalTP + totalFP)));
-        System.out.println("    Selectivity: " + (totalTN / (totalTN + totalFP)));
     }
 }
