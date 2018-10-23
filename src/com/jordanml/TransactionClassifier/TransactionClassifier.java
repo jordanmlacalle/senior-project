@@ -27,7 +27,7 @@ import weka.filters.unsupervised.attribute.Remove;
 
 public class TransactionClassifier
 {
-
+    // The class index to be considered positive when classifying instances
     public static final int POSITIVE_CLASS_INDEX = 1;
     
     public static void main(String[] args)
@@ -127,6 +127,7 @@ public class TransactionClassifier
     {
         String filepathTrain, filepathTest, resultsPath;
         Dataset trainingSet, testingSet;
+        float learningRate, momentum;
         
         if(args.length < 4)
         {
@@ -138,6 +139,25 @@ public class TransactionClassifier
             filepathTrain = args[1];
             filepathTest = args[2];
             resultsPath = args[3];
+            
+            try
+            {
+                learningRate = Float.parseFloat(args[4]);
+                momentum = Float.parseFloat(args[5]);
+            }
+            catch(NumberFormatException e)
+            {
+                System.out.println("Learning rate and momentum are expected as floats between 0.0 and 1.0");
+                printProperUsage();
+                return;
+            }
+            
+            if(learningRate < 0.0 || learningRate > 1.0 || momentum < 0.0 || momentum > 1.0)
+            {
+                System.out.println("Learning rate and momentum are expected as floats between 0.0 and 1.0");
+                printProperUsage();
+                return;
+            }
             
             // Load the training set
             trainingSet = new Dataset(filepathTrain);
@@ -156,7 +176,7 @@ public class TransactionClassifier
             }
             else
             {
-                Evaluation results = testOnceClassify(trainingSet, testingSet);
+                Evaluation results = testOnceClassify(trainingSet, testingSet, learningRate, momentum);
                 
                 if(results == null)
                 {
@@ -184,10 +204,10 @@ public class TransactionClassifier
         }
     }
 
-    public static Evaluation testOnceClassify(Dataset trainingSet, Dataset testSet)
+    public static Evaluation testOnceClassify(Dataset trainingSet, Dataset testSet, float learningRate, float momentum)
     {
         Evaluation eval;
-        MultilayerPerceptron neuralNetwork = new MultilayerPerceptron();
+        MultilayerPerceptron neuralNetwork;
         
         // Preprocess data using reduct with largest reduction in dimensionality
         //TODO: Remove timing
@@ -208,6 +228,10 @@ public class TransactionClassifier
             e.printStackTrace();
             return null;
         }
+        
+        neuralNetwork = new MultilayerPerceptron();
+        neuralNetwork.setLearningRate(learningRate);
+        neuralNetwork.setMomentum(momentum);
         
         // Build and evaluate model based on training data
         try
