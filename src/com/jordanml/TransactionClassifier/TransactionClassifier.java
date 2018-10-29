@@ -2,10 +2,12 @@ package com.jordanml.TransactionClassifier;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Properties;
 
 // RSESLIB
 import rseslib.processing.reducts.AllGlobalReductsProvider;
@@ -27,7 +29,7 @@ import weka.filters.unsupervised.attribute.Remove;
 
 public class TransactionClassifier
 {
-
+    // The class index to be considered positive when classifying instances
     public static final int POSITIVE_CLASS_INDEX = 1;
     
     public static void main(String[] args)
@@ -127,8 +129,10 @@ public class TransactionClassifier
     {
         String filepathTrain, filepathTest, resultsPath;
         Dataset trainingSet, testingSet;
+        float learningRate, momentum;
+        int reductMode;
         
-        if(args.length < 4)
+        if(args.length < 7)
         {
             System.out.println("Not enough arguments for mode 'test-once'");
             printProperUsage();
@@ -138,6 +142,33 @@ public class TransactionClassifier
             filepathTrain = args[1];
             filepathTest = args[2];
             resultsPath = args[3];
+            
+            try
+            {
+                learningRate = Float.parseFloat(args[4]);
+                momentum = Float.parseFloat(args[5]);
+                reductMode = Integer.parseInt(args[6]);
+            }
+            catch(NumberFormatException e)
+            {
+                System.out.println("Learning rate and momentum are expected as floats between 0.0 and 1.0");
+                printProperUsage();
+                return;
+            }
+            
+            if(learningRate < 0.0 || learningRate > 1.0 || momentum < 0.0 || momentum > 1.0)
+            {
+                System.out.println("Learning rate and momentum are expected as floats between 0.0 and 1.0");
+                printProperUsage();
+                return;
+            }
+            
+            if(reductMode != 1 && reductMode != 2)
+            {
+                System.out.println("Reduct-mode can only be set to 1 (M-All) or 2 (M-Dec)");
+                printProperUsage();
+                return;
+            }
             
             // Load the training set
             trainingSet = new Dataset(filepathTrain);
@@ -156,7 +187,7 @@ public class TransactionClassifier
             }
             else
             {
-                Evaluation results = testOnceClassify(trainingSet, testingSet);
+                Evaluation results = testOnceClassify(trainingSet, testingSet, learningRate, momentum, reductMode);
                 
                 if(results == null)
                 {
@@ -184,15 +215,15 @@ public class TransactionClassifier
         }
     }
 
-    public static Evaluation testOnceClassify(Dataset trainingSet, Dataset testSet)
+    public static Evaluation testOnceClassify(Dataset trainingSet, Dataset testSet, float learningRate, float momentum, int reductMode)
     {
         Evaluation eval;
-        MultilayerPerceptron neuralNetwork = new MultilayerPerceptron();
+        MultilayerPerceptron neuralNetwork;
         
         // Preprocess data using reduct with largest reduction in dimensionality
         //TODO: Remove timing
         long startReduct = System.nanoTime();
-        BitSet reductBitSet = findReducts(trainingSet, trainingSet.getPath() + "_discretized.arff");
+        BitSet reductBitSet = findReducts(trainingSet, trainingSet.getPath() + "_discretized.arff", reductMode);
         long endReduct = System.nanoTime();
         System.out.println("Time to discretize and find reduct: " + (endReduct - startReduct)/1000000);
         
@@ -208,6 +239,10 @@ public class TransactionClassifier
             e.printStackTrace();
             return null;
         }
+        
+        neuralNetwork = new MultilayerPerceptron();
+        neuralNetwork.setLearningRate(learningRate);
+        neuralNetwork.setMomentum(momentum);
         
         // Build and evaluate model based on training data
         try
@@ -238,6 +273,9 @@ public class TransactionClassifier
         }
     }
     
+    /**
+     * Prints the proper usage for this program to stdout
+     */
     public static void printProperUsage()
     {
         System.out.println("Usage: jml-classifier [mode] [args...]");
@@ -247,17 +285,23 @@ public class TransactionClassifier
         System.out.println("          dataset : path to .arff file containing the target dataset");
         System.out.println("          folds   : integer representing the desired number of folds");
         System.out.println("          savepath: base path to save .arff files to");
-        System.out.println("\n    test-once <train> <test> <results>");
+        System.out.println("\n    test-once <train> <test> <results> <learning-rate> <momentum> <reduct-mode>");
         System.out.println("          builds and trains a neural network on a training set and evaluates");
         System.out.println("          the model on the given testing set. Confusion matrix data is saved");
         System.out.println("          in plain-text to the specified path");
-        System.out.println("          train  : path to the .arff file containing the training data");
-        System.out.println("          test   : path to the .arff file containing the testing data");
-        System.out.println("          results: path to save the confusion matrix data to");
+        System.out.println("          train        : path to the .arff file containing the training data");
+        System.out.println("          test         : path to the .arff file containing the testing data");
+        System.out.println("          results      : path to save the confusion matrix data to");
+        System.out.println("          learning-rate: the learning rate for backpropagation (0.0 - 1.0)");
+        System.out.println("          momentum     : the momentum coefficient for backpropagation");
+        System.out.println("          reduct-mode  : the mode for reduct selection {1, 2}");
+        System.out.println("                             1: Use discrenibility matrix of type M-All");
+        System.out.println("                             2: Use discernibility matrix of type M-Dec");
         System.out.println("    help");
         System.out.println("          displays usage information");
         System.out.println("Author: Jordan Moreno-Lacalle");
     }
+    
     /**
      * Applies the given reduct to the given dataset and returns the new dataset.
      * All attributes that are not included in the given reduct are removed.
@@ -409,7 +453,7 @@ public class TransactionClassifier
      * @param discPath The path to save the discretized data to 
      * @return BitSet representing the most minimal reduct
      */
-    public static BitSet findReducts(Dataset dataset, String discPath)
+    public static BitSet findReducts(Dataset dataset, String discPath, int reductMode)
     {
         // Discretize the data and save to a new file, this file will be loaded again and used to compute reducts
         if(null == dataset.discretize(discPath))
@@ -430,10 +474,21 @@ public class TransactionClassifier
             Report.addInfoOutput(consoleStd);
             Report.addErrorOutput(consoleErr);
 
-            // Prepare reduct provider
-            DoubleDataTable table = new ArrayListDoubleDataTable(new File(discPath), new StdOutProgress());
-            AllGlobalReductsProvider reductsProvider = new AllGlobalReductsProvider(null, table);
+            // Prepare reduct provider with appropriate properties
+            Properties properties = new Properties();
+            InputStream fileStream;
 
+            if(reductMode == 1)
+                fileStream = TransactionClassifier.class.getResourceAsStream("/discernibility-matrix-all.properties");
+            else
+                fileStream = TransactionClassifier.class.getResourceAsStream("/discernibility-matrix-dec.properties");
+            
+            properties.load(fileStream);
+            
+            DoubleDataTable table = new ArrayListDoubleDataTable(new File(discPath), new StdOutProgress());
+            AllGlobalReductsProvider reductsProvider = new AllGlobalReductsProvider(properties, table);
+            
+            
             // Get reducts
             Collection<BitSet> reducts = reductsProvider.getReducts();
 
