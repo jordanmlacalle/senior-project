@@ -34,6 +34,7 @@ public class TransactionClassifier
     
     public static void main(String[] args)
     {
+        System.out.println("Last updated: 10/30/2018");
         long start = System.nanoTime(); // Time that execution started
         checkArgs(args);
         long end = System.nanoTime(); // Time that execution ended
@@ -125,6 +126,13 @@ public class TransactionClassifier
         }
     }
     
+    /**
+     * Checks arguments for the testOnce mode. If arguments are valid, calls testOnceClassify
+     * and trains and evaluates a model with the given training set, evaluation set, learning rate,
+     * momentum, and reduct mode.
+     * 
+     * @param args
+     */
     public static void testOnce(String[] args)
     {
         String filepathTrain, filepathTest, resultsPath;
@@ -215,6 +223,16 @@ public class TransactionClassifier
         }
     }
 
+    /**
+     * Performs one run of training and testing and returns the evaluation.
+     * 
+     * @param trainingSet  - the data to train the model on
+     * @param testSet      - the data to test the model on
+     * @param learningRate - the learning rate for the model
+     * @param momentum     - the momentum for the model
+     * @param reductMode   - the type of discernibility matrix to use (1 - mAll or 2 - mDec)
+     * @return             - returns the evaluation for the model
+     */
     public static Evaluation testOnceClassify(Dataset trainingSet, Dataset testSet, float learningRate, float momentum, int reductMode)
     {
         Evaluation eval;
@@ -222,6 +240,7 @@ public class TransactionClassifier
         
         // Preprocess data using reduct with largest reduction in dimensionality
         //TODO: Remove timing
+        System.out.println("Beginning discretization and reduct selection...");
         long startReduct = System.nanoTime();
         BitSet reductBitSet = findReducts(trainingSet, trainingSet.getPath() + "_discretized.arff", reductMode);
         long endReduct = System.nanoTime();
@@ -456,12 +475,14 @@ public class TransactionClassifier
     public static BitSet findReducts(Dataset dataset, String discPath, int reductMode)
     {
         // Discretize the data and save to a new file, this file will be loaded again and used to compute reducts
+        long discStart = System.nanoTime();
         if(null == dataset.discretize(discPath))
         {
             System.err.println("Could not discretize data");
             return null;
         }
-        
+        long discEnd = System.nanoTime();
+        System.out.println("Discretization took: " + (discEnd - discStart)/1000000);
         /*
          * rseslib uses a different file format than WEKA, so data loading must be
          * handled separately for reduct selection.
@@ -490,8 +511,12 @@ public class TransactionClassifier
             
             
             // Get reducts
+            System.out.println("Finding reducts...");
+            long reductStart = System.nanoTime();
             Collection<BitSet> reducts = reductsProvider.getReducts();
-
+            long reductEnd = System.nanoTime();
+            System.out.println("Finding reducts took: " + (reductEnd - reductStart)/1000000);
+            
             // Get the first reduct (it offers the most reduction in dimensionality)
             Object reductsArray[] = reducts.toArray();
             ArrayList<BitSet> reductsList = new ArrayList<BitSet>();
