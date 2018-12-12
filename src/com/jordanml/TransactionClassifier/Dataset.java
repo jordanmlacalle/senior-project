@@ -11,13 +11,14 @@ public class Dataset
 {
 
     /**
-     * data - the object that contains the dataset instances - the number of
-     * instances in the dataset attributes - the number of attributes in the dataset
+     * data - the object that contains the dataset instances
      * path - the path to the file from which the dataset was loaded
+     * name - the name of the dataset
      */
     public Instances data;
     private String path;
-
+    private String name;
+    
     /**
      * Constructor
      */
@@ -25,6 +26,7 @@ public class Dataset
     {
         data = null;
         path = null;
+        name = null;
     }
 
     /**
@@ -64,6 +66,11 @@ public class Dataset
         return path;
     }
 
+    public String getName()
+    {
+        return name;
+    }
+    
     /**
      * Gets number of instances in dataset
      * 
@@ -111,6 +118,11 @@ public class Dataset
         return data;
     }
 
+    public void setName(String name)
+    {
+        this.name = name;
+    }
+    
     /**
      * Sets the class index
      * 
