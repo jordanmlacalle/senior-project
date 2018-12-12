@@ -34,7 +34,6 @@ public class TransactionClassifier
     
     public static void main(String[] args)
     {
-        System.out.println("Last updated: 10/30/2018");
         long start = System.nanoTime(); // Time that execution started
         checkArgs(args);
         long end = System.nanoTime(); // Time that execution ended
@@ -64,6 +63,9 @@ public class TransactionClassifier
                     break;
                 case "test-once":
                     testOnce(args);
+                    break;
+                case "multi":
+                    tryMultithread(args);
                     break;
                 case "help":
                     printProperUsage();
@@ -121,11 +123,69 @@ public class TransactionClassifier
             else
             {
                 // Split the data
-                splitData(dataset, numFolds, savePath, true);
+                DatasetSplitter splitter = null;
+                
+                splitData(splitter, dataset, numFolds, savePath, true);
             }
         }
     }
     
+    /**
+     * Checks provided arguments and attempts to run multi-threaded cross validation
+     * @param args
+     */
+    public static void tryMultithread(String args[])
+    {
+        String datasetPath = null;
+        String resultsPath = null;
+        String savePath = null;
+        float learningRate, momentum;
+        int numFolds, reductMode;
+        
+        if(args.length < 8)
+        {
+            System.out.println("Not enough arguments for mode: multi");
+            return;
+        }
+        else
+        {
+            datasetPath = args[1];
+            resultsPath = args[2];
+            savePath = args[3];
+            
+            try
+            {
+                numFolds = Integer.parseInt(args[4]);
+                learningRate = Float.parseFloat(args[5]);
+                momentum = Float.parseFloat(args[6]);
+                reductMode = Integer.parseInt(args[7]);
+            }
+            catch(NumberFormatException e)
+            {
+                System.out.println("Invalid non-numeric argument.");
+                printProperUsage();
+                return;
+            }
+            
+            if(reductMode != 1 && reductMode != 2)
+            {
+                System.out.println("Invalid reduct mode. Must be 1 or 2.");
+                printProperUsage();
+                return;
+            }
+            
+            Dataset dataset = new Dataset(datasetPath);
+            
+            if(!dataset.hasData())
+            {
+                System.out.println("Failed to load data from " + datasetPath);
+                return;
+            }
+            
+            multithreadCV(resultsPath, dataset, numFolds, savePath, learningRate, momentum, reductMode);
+            
+        }
+    }
     /**
      * Checks arguments for the testOnce mode. If arguments are valid, calls testOnceClassify
      * and trains and evaluates a model with the given training set, evaluation set, learning rate,
@@ -196,33 +256,156 @@ public class TransactionClassifier
             else
             {
                 Evaluation results = testOnceClassify(trainingSet, testingSet, learningRate, momentum, reductMode);
-                
-                if(results == null)
-                {
-                    System.out.println("Could not run classifier");
-                }
-                else
-                {
-                    try
-                    {
-
-                        PrintWriter printResults = new PrintWriter(new FileWriter(resultsPath));
-                        printResults.printf("TP: %f%nFP: %f%nTN: %f%nFN: %f", results.numTruePositives(POSITIVE_CLASS_INDEX),
-                                                                              results.numFalsePositives(POSITIVE_CLASS_INDEX),
-                                                                              results.numTrueNegatives(POSITIVE_CLASS_INDEX),
-                                                                              results.numFalseNegatives(POSITIVE_CLASS_INDEX));
-                        printResults.close();
-                        System.out.println("Saved results to " + resultsPath);
-                    }
-                    catch(Exception e)
-                    {
-                        System.out.println("Could not save results");
-                    }
-                }
+                saveResults(results, resultsPath);
             }
         }
     }
 
+    /**
+     * Saves the results produced by evaluation of a classifier.
+     * 
+     * @param results
+     * @param path path to save results to 
+     */
+    public static void saveResults(Evaluation results, String path)
+    {
+        if(results == null)
+        {
+            System.out.println("Empty results -> Could not run classifier");
+        }
+        else
+        {
+            try
+            {
+
+                PrintWriter printResults = new PrintWriter(new FileWriter(path));
+                printResults.printf("TP: %f%nFP: %f%nTN: %f%nFN: %f\n", results.numTruePositives(POSITIVE_CLASS_INDEX),
+                                                                      results.numFalsePositives(POSITIVE_CLASS_INDEX),
+                                                                      results.numTrueNegatives(POSITIVE_CLASS_INDEX),
+                                                                      results.numFalseNegatives(POSITIVE_CLASS_INDEX));
+                printResults.close();
+                System.out.println("Saved results to " + path);
+            }
+            catch(Exception e)
+            {
+                System.out.println("Could not save results");
+            }
+        }
+    }
+    
+    /**
+     * Runs multi-threaded cross validation. Each run of cross validation is executed in a separate thread.
+     * 
+     * @param resultsPath base path to save results to 
+     * @param dataset the source dataset
+     * @param numFolds the number of folds
+     * @param savePath path to save folds .arff files to 
+     * @param learningRate the learning rate for backpropagation
+     * @param momentum the momentum for backpropagation
+     */
+    public static void multithreadCV(String resultsPath, Dataset dataset, int numFolds, String savePath, float learningRate, float momentum, int reductMode)
+    {
+        // Initialize start time
+        long t_start = System.nanoTime();
+        
+        CrossValidationThread threads[] = new CrossValidationThread[numFolds];
+        
+        
+        // split dataset into multiple folds
+        DatasetSplitter splitter = null;
+        String foldPaths[] = splitData(splitter, dataset, numFolds, savePath, false);
+        int firstIndex[] = new int[numFolds];
+        
+        // Combine the folds into a single dataset
+        ArrayList<Dataset>folds = new ArrayList<Dataset>();
+        
+        for(int i = 0; i < numFolds; i++)
+        {
+            if(i == 0)
+                firstIndex[i] = 0;
+            else
+                firstIndex[i] = firstIndex[i - 1] + folds.get(i - 1).numInstances() - 1;
+            
+            folds.add(new Dataset(foldPaths[i]));
+        }
+        
+        // Combine folds again
+        Dataset fullSet = makeTrainingSet(folds);
+        
+        for(int i = 0; i < numFolds; i++)
+        {
+            // get each dataset and test set
+            Dataset test = getTestDataset(fullSet, firstIndex[i], folds.get(i).numInstances());
+            Dataset train = getTrainDataset(fullSet, firstIndex[i], folds.get(i).numInstances());
+            test.setClassIndex(test.numAttributes() - 1);
+            train.setClassIndex(train.numAttributes() - 1);
+            test.setName(savePath + "fold_" + i + "_test");
+            train.setName(savePath + "fold_" + i + "_train");
+            // run testOnceClassify
+            threads[i] = new CrossValidationThread();
+            threads[i].init(resultsPath + "_fold_" + i, train, test, i, learningRate, momentum, reductMode);
+            threads[i].start();
+        }
+        folds = null;
+        
+        for(int i = 0; i < numFolds; i++)
+        {
+            try
+            {
+                threads[i].join(); 
+            }
+            catch(InterruptedException e)
+            {
+                System.err.println("Thread handling fold " + i + " was interrupted");
+                return;
+            }
+        }
+        
+        long t_end = System.nanoTime();
+        
+        System.out.println("All threads have completed their jobs. Time: " + (t_end - t_start)/1000000 + " ms");
+    }
+    
+    /**
+     * Makes a new dataset by copying sequential instances from a given source
+     * @param source the source dataset
+     * @param first the first instance to be copied
+     * @param numInstances the number of instances to be copied
+     * @return returns the new dataset
+     */
+    public static Dataset getTestDataset(Dataset source, int first, int numInstances)
+    {
+        Instances test = new Instances(source.getInstances(), numInstances);
+        
+        for(int i = 0; i < numInstances; i++)
+        {
+            test.add(source.getInstances().get(first + i));
+        }
+        
+        return new Dataset(test);
+    }
+    
+    /**
+     * Makes a new dataset by adding all instances from a given source
+     * EXCEPT for instances in the range [testFirst, testFirst + testInstances - 1]
+     * @param source the source dataset
+     * @param testFirst the first instance to be excluded
+     * @param testInstances the number of instances to be excluded
+     * @return returns the new dataset
+     */
+    public static Dataset getTrainDataset(Dataset source, int testFirst, int testInstances)
+    {
+        Instances train = new Instances(source.getInstances(), source.numInstances() - testInstances);
+        
+        for(int i = 0; i < source.numInstances(); i++)
+        {
+            if(i < testFirst || i > (testFirst + testInstances - 1))
+                train.add(source.getInstances().get(i));
+        }
+        
+        return new Dataset(train);
+    }
+    
     /**
      * Performs one run of training and testing and returns the evaluation.
      * 
@@ -242,7 +425,7 @@ public class TransactionClassifier
         //TODO: Remove timing
         System.out.println("Beginning discretization and reduct selection...");
         long startReduct = System.nanoTime();
-        BitSet reductBitSet = findReducts(trainingSet, trainingSet.getPath() + "_discretized.arff", reductMode);
+        BitSet reductBitSet = findReducts(trainingSet, trainingSet.getName() + "_discretized.arff", reductMode);
         long endReduct = System.nanoTime();
         System.out.println("Time to discretize and find reduct: " + (endReduct - startReduct)/1000000);
         
@@ -301,21 +484,30 @@ public class TransactionClassifier
         System.out.println("\nwhere modes include:");
         System.out.println("    split <dataset> <folds> <savepath>");
         System.out.println("          split a dataset into separate folds with similar class ratios");
-        System.out.println("          dataset : path to .arff file containing the target dataset");
-        System.out.println("          folds   : integer representing the desired number of folds");
-        System.out.println("          savepath: base path to save .arff files to");
-        System.out.println("\n    test-once <train> <test> <results> <learning-rate> <momentum> <reduct-mode>");
+        System.out.println("          dataset  : path to .arff file containing the target dataset");
+        System.out.println("          folds    : integer representing the desired number of folds");
+        System.out.println("          savepath : base path to save .arff files to\n");
+        System.out.println("    test-once <train> <test> <results> <learning-rate> <momentum> <reduct-mode>");
         System.out.println("          builds and trains a neural network on a training set and evaluates");
         System.out.println("          the model on the given testing set. Confusion matrix data is saved");
         System.out.println("          in plain-text to the specified path");
-        System.out.println("          train        : path to the .arff file containing the training data");
-        System.out.println("          test         : path to the .arff file containing the testing data");
-        System.out.println("          results      : path to save the confusion matrix data to");
-        System.out.println("          learning-rate: the learning rate for backpropagation (0.0 - 1.0)");
-        System.out.println("          momentum     : the momentum coefficient for backpropagation");
-        System.out.println("          reduct-mode  : the mode for reduct selection {1, 2}");
+        System.out.println("          train         : path to the .arff file containing the training data");
+        System.out.println("          test          : path to the .arff file containing the testing data");
+        System.out.println("          results       : path to save the confusion matrix data to");
+        System.out.println("          learning-rate : the learning rate for backpropagation (0.0 - 1.0)");
+        System.out.println("          momentum      : the momentum coefficient for backpropagation");
+        System.out.println("          reduct-mode   : the mode for reduct selection {1, 2}");
         System.out.println("                             1: Use discrenibility matrix of type M-All");
-        System.out.println("                             2: Use discernibility matrix of type M-Dec");
+        System.out.println("                             2: Use discernibility matrix of type M-Dec\n");
+        System.out.println("    multi <dataset> <savepath> <results> <folds> <learning-rate> <momentum> <reduct-mode>");
+        System.out.println("          run cross-validation using concurrent threads");
+        System.out.println("          dataset       : path to .arff file containing the target dataset");
+        System.out.println("          savepath      : base path to save .arff files to");
+        System.out.println("          results       : base path to save confusion matrix data to ");
+        System.out.println("          folds         : integer representing the desired number of folds");
+        System.out.println("          learning-rate : the learning rate for backpropagation (0.0 - 1.0)");
+        System.out.println("          momentum      : the momentum coefficient for backpropagation");
+        System.out.println("          reduct-mode   : the mode for reduct selection {1, 2}");
         System.out.println("    help");
         System.out.println("          displays usage information");
         System.out.println("Author: Jordan Moreno-Lacalle");
@@ -395,11 +587,12 @@ public class TransactionClassifier
      * @param dataset  The dataset to be split
      * @param numFolds The number of folds
      * @param path     The base path to save fold data to
+     * @return returns paths to fold files
      */
-    public static String[] splitData(Dataset dataset, int numFolds, String path, boolean saveCombined)
+    public static String[] splitData(DatasetSplitter splitter, Dataset dataset, int numFolds, String path, boolean saveCombined)
     {
         String paths[] = new String[numFolds];
-        DatasetSplitter splitter = new DatasetSplitter(dataset.getInstances());
+        splitter = new DatasetSplitter(dataset.getInstances());
 
         splitter.initFolds(numFolds);
         System.out.print("Splitting dataset...");
@@ -499,23 +692,29 @@ public class TransactionClassifier
             Properties properties = new Properties();
             InputStream fileStream;
 
-            if(reductMode == 1)
-                fileStream = TransactionClassifier.class.getResourceAsStream("/discernibility-matrix-all.properties");
-            else
+            //if(reductMode == 1)
+            //    fileStream = TransactionClassifier.class.getResourceAsStream("/discernibility-matrix-all.properties");
+            //else
+            if(reductMode == 2)
+            {
                 fileStream = TransactionClassifier.class.getResourceAsStream("/discernibility-matrix-dec.properties");
-            
-            properties.load(fileStream);
-            
+                properties.load(fileStream);
+            }
+            else
+            {
+                properties = null;
+            }
+                            
             DoubleDataTable table = new ArrayListDoubleDataTable(new File(discPath), new StdOutProgress());
+            //AllGlobalReductsProvider reductsProvider = new AllGlobalReductsProvider(null, table);
             AllGlobalReductsProvider reductsProvider = new AllGlobalReductsProvider(properties, table);
-            
             
             // Get reducts
             System.out.println("Finding reducts...");
             long reductStart = System.nanoTime();
             Collection<BitSet> reducts = reductsProvider.getReducts();
             long reductEnd = System.nanoTime();
-            System.out.println("Finding reducts took: " + (reductEnd - reductStart)/1000000);
+            System.out.println("THREAD: " + Thread.currentThread().getId() + " -Finding reducts took: " + (reductEnd - reductStart)/1000000);
             
             // Get the first reduct (it offers the most reduction in dimensionality)
             Object reductsArray[] = reducts.toArray();
